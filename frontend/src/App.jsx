@@ -22,7 +22,7 @@ const AppLayout = ({ children }) => {
           <span>Print<span style={{ color: 'var(--primary-color)' }}>Go</span> {isMobile && <span style={{fontSize:'1rem', opacity:0.8}}>Mobile</span>}</span>
         </Link>
         {!isAdmin && !isMobile && (
-          <Link to="/admin" className="btn" style={{ fontSize: '0.875rem', padding: '0.5rem 1rem' }}>
+          <Link to="/admin" className="btn" style={{ position: 'absolute', top: '1rem', right: '1rem', fontSize: '0.875rem', padding: '0.5rem 1rem' }}>
             Admin Login
           </Link>
         )}
