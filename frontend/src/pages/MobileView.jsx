@@ -176,7 +176,7 @@ const MobileView = () => {
 
       const { paymentSessionId, orderId } = orderRes.data;
       const cashfree = window.Cashfree({
-        mode: "sandbox",
+        mode: "production",
       });
 
       let checkoutOptions = {

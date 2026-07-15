@@ -71,7 +71,7 @@ router.post('/:id/cashfree/order', async (req, res) => {
   }
 
   try {
-    const response = await axios.post('https://sandbox.cashfree.com/pg/orders', {
+    const response = await axios.post('https://api.cashfree.com/pg/orders', {
       customer_details: {
         customer_id: `cust_${job.id}`,
         customer_phone: '9876543210',
@@ -110,7 +110,7 @@ router.post('/:id/cashfree/verify', async (req, res) => {
   const { order_id } = req.body;
 
   try {
-    const response = await axios.get(`https://sandbox.cashfree.com/pg/orders/${order_id}`, {
+    const response = await axios.get(`https://api.cashfree.com/pg/orders/${order_id}`, {
       headers: {
         'x-client-id': process.env.CASHFREE_APP_ID,
         'x-client-secret': process.env.CASHFREE_SECRET_KEY,
