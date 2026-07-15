@@ -15,7 +15,17 @@ const startPrintingProcess = (jobId, io) => {
     if (job.status === 'Waiting') {
       job.status = 'Printing';
       saveJobs();
-      if(io) io.emit('job_status_changed', job);
+      if(io) {
+        io.emit('job_status_changed', job);
+        // Emit to the physical printer agent
+        io.emit('physical_print_job', {
+          jobId: job.id,
+          fileUrl: `/uploads/${job.file.filename}`, // Relative URL
+          originalName: job.file.originalName,
+          settings: job.settings,
+          price: job.price
+        });
+      }
       console.log(`Job ${jobId} is now Printing...`);
       
       // After calculated print time, move to completed
