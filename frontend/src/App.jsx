@@ -5,6 +5,9 @@ import { Printer } from 'lucide-react';
 import KioskView from './pages/KioskView';
 import MobileView from './pages/MobileView';
 import AdminDashboard from './pages/AdminDashboard';
+import ContactUs from './pages/ContactUs';
+import Terms from './pages/Terms';
+import Refunds from './pages/Refunds';
 
 const AppLayout = ({ children }) => {
   const location = useLocation();
@@ -27,6 +30,11 @@ const AppLayout = ({ children }) => {
       <main className="main-content" style={isMobile ? { padding: 0 } : {}}>
         {children}
       </main>
+      <footer style={{ textAlign: 'center', padding: '1rem', marginTop: 'auto', fontSize: '0.8rem', opacity: 0.8 }}>
+        <Link to="/contact" style={{ margin: '0 10px', color: 'var(--text-color)' }}>Contact Us</Link>
+        <Link to="/terms" style={{ margin: '0 10px', color: 'var(--text-color)' }}>Terms & Conditions</Link>
+        <Link to="/refunds" style={{ margin: '0 10px', color: 'var(--text-color)' }}>Refunds & Cancellations</Link>
+      </footer>
     </div>
   );
 };
@@ -40,6 +48,9 @@ const App = () => {
           <Route path="/kiosk" element={<KioskView />} />
           <Route path="/m/:sessionId" element={<MobileView />} />
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/contact" element={<ContactUs />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/refunds" element={<Refunds />} />
         </Routes>
       </AppLayout>
     </Router>
