@@ -78,7 +78,7 @@ router.post('/:id/cashfree/order', async (req, res) => {
         customer_name: 'PrintGo User'
       },
       order_meta: {
-        return_url: `http://localhost:5173/` // Dummy return url since we use modal
+        return_url: `https://print-go-steel.vercel.app/` // Dummy return url since we use modal, must be https for prod
       },
       order_amount: job.price,
       order_currency: 'INR'
