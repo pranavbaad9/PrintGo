@@ -149,64 +149,62 @@ const MobileView = () => {
     }
   };
 
-  const loadRazorpay = () => {
+  const loadCashfree = () => {
     return new Promise((resolve) => {
+      if (window.Cashfree) {
+        resolve(true);
+        return;
+      }
       const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.src = 'https://sdk.cashfree.com/pg/js/v3/cashfree.js';
       script.onload = () => resolve(true);
       script.onerror = () => resolve(false);
       document.body.appendChild(script);
     });
   };
 
-  const handleRazorpayPayment = async () => {
-    const res = await loadRazorpay();
+  const handleCashfreePayment = async () => {
+    const res = await loadCashfree();
     if (!res) {
-      alert('Razorpay SDK failed to load. Are you online?');
+      alert('Cashfree SDK failed to load. Are you online?');
       return;
     }
 
     try {
-      const orderRes = await axios.post(`${import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`}/api/jobs/${jobId}/razorpay/order`);
+      const orderRes = await axios.post(`${import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`}/api/jobs/${jobId}/cashfree/order`);
       if (!orderRes.data.success) return;
 
-      const { order, keyId } = orderRes.data;
+      const { paymentSessionId, orderId } = orderRes.data;
+      const cashfree = window.Cashfree({
+        mode: "sandbox",
+      });
 
-      const options = {
-        key: keyId,
-        amount: order.amount,
-        currency: order.currency,
-        name: "PrintGo",
-        description: "Print Document",
-        order_id: order.id,
-        handler: async function (response) {
-          try {
-            await axios.post(`${import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`}/api/jobs/${jobId}/razorpay/verify`, {
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_signature: response.razorpay_signature
-            });
-            // The socket 'job_status_changed' will move the UI to step 4 automatically
-          } catch (err) {
-            alert('Payment verification failed.');
-          }
-        },
-        prefill: {
-          name: "PrintGo Customer",
-          email: "receipts@printgo.local",
-          contact: "9876543210"
-        },
-        theme: {
-          color: "#6366f1" // primary color
-        }
+      let checkoutOptions = {
+        paymentSessionId: paymentSessionId,
+        redirectTarget: "_modal",
       };
 
-      const paymentObject = new window.Razorpay(options);
-      paymentObject.open();
+      cashfree.checkout(checkoutOptions).then(async (result) => {
+        if(result.error){
+            console.log("Cashfree checkout error:", result.error);
+            alert("Payment failed or cancelled.");
+        }
+        if(result.paymentDetails){
+            console.log("Payment completed, verifying...", result.paymentDetails);
+            try {
+              await axios.post(`${import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`}/api/jobs/${jobId}/cashfree/verify`, {
+                order_id: orderId
+              });
+              // Socket job_status_changed handles UI step update
+            } catch (err) {
+              alert('Payment verification failed.');
+            }
+        }
+      });
 
     } catch (err) {
-      console.error(err);
-      alert('Failed to initialize Razorpay');
+      console.error("Payment init error:", err);
+      alert('Failed to initialize Cashfree');
     }
   };
 
@@ -310,10 +308,10 @@ const MobileView = () => {
           
           <button 
             className="btn btn-primary w-full mt-4 flex align-center justify-center gap-2" 
-            onClick={handleRazorpayPayment}
+            onClick={handleCashfreePayment}
             style={{ fontSize: '1.2rem', padding: '1rem' }}
           >
-            Pay Securely with Razorpay
+            Pay Securely with Cashfree
           </button>
         </div>
       </div>

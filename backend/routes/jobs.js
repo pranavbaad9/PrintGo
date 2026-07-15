@@ -2,8 +2,8 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { jobs, saveJobs } = require('../data/jobsData');
 const { startPrintingProcess, calculateEstimatedWaitTime } = require('../services/queueService');
-const Razorpay = require('razorpay');
 const crypto = require('crypto');
+const axios = require('axios');
 
 const router = express.Router();
 
@@ -61,8 +61,8 @@ router.post('/:id/pay', (req, res) => {
   }
 });
 
-// Razorpay Order Creation
-router.post('/:id/razorpay/order', async (req, res) => {
+// Cashfree Order Creation
+router.post('/:id/cashfree/order', async (req, res) => {
   const job = jobs.find(j => j.id === req.params.id);
   if (!job) return res.status(404).json({ error: 'Job not found' });
   
@@ -71,48 +71,67 @@ router.post('/:id/razorpay/order', async (req, res) => {
   }
 
   try {
-    const razorpay = new Razorpay({
-      key_id: process.env.RAZORPAY_KEY_ID,
-      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    const response = await axios.post('https://sandbox.cashfree.com/pg/orders', {
+      customer_details: {
+        customer_id: `cust_${job.id}`,
+        customer_phone: '9876543210',
+        customer_name: 'PrintGo User'
+      },
+      order_meta: {
+        return_url: `http://localhost:5173/` // Dummy return url since we use modal
+      },
+      order_amount: job.price,
+      order_currency: 'INR'
+    }, {
+      headers: {
+        'x-client-id': process.env.CASHFREE_APP_ID,
+        'x-client-secret': process.env.CASHFREE_SECRET_KEY,
+        'x-api-version': '2023-08-01',
+        'Content-Type': 'application/json'
+      }
     });
 
-    const options = {
-      amount: Math.round(job.price * 100), // amount in paise
-      currency: "INR",
-      receipt: `receipt_${job.id}`
-    };
-
-    const order = await razorpay.orders.create(options);
-    res.json({ success: true, order, keyId: process.env.RAZORPAY_KEY_ID });
+    res.json({ 
+      success: true, 
+      paymentSessionId: response.data.payment_session_id,
+      orderId: response.data.order_id
+    });
   } catch (error) {
-    console.error("Razorpay order error:", error);
-    res.status(500).json({ error: 'Failed to create Razorpay order' });
+    console.error("Cashfree order error:", error?.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to create Cashfree order' });
   }
 });
 
-// Razorpay Verification
-router.post('/:id/razorpay/verify', (req, res) => {
+// Cashfree Verification
+router.post('/:id/cashfree/verify', async (req, res) => {
   const job = jobs.find(j => j.id === req.params.id);
   if (!job) return res.status(404).json({ error: 'Job not found' });
 
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+  const { order_id } = req.body;
 
-  const sign = razorpay_order_id + "|" + razorpay_payment_id;
-  const expectedSign = crypto
-    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-    .update(sign.toString())
-    .digest("hex");
+  try {
+    const response = await axios.get(`https://sandbox.cashfree.com/pg/orders/${order_id}`, {
+      headers: {
+        'x-client-id': process.env.CASHFREE_APP_ID,
+        'x-client-secret': process.env.CASHFREE_SECRET_KEY,
+        'x-api-version': '2023-08-01'
+      }
+    });
 
-  if (razorpay_signature === expectedSign) {
-    if (job.status === 'Pending_Payment') {
-      job.status = 'Waiting';
-      saveJobs();
-      req.app.get('io').emit('job_status_changed', job);
-      startPrintingProcess(job.id, req.app.get('io'));
+    if (response.data.order_status === 'PAID') {
+      if (job.status === 'Pending_Payment') {
+        job.status = 'Waiting';
+        saveJobs();
+        req.app.get('io').emit('job_status_changed', job);
+        startPrintingProcess(job.id, req.app.get('io'));
+      }
+      return res.json({ success: true, job });
+    } else {
+      return res.status(400).json({ error: 'Payment not successful yet.' });
     }
-    return res.json({ success: true, job });
-  } else {
-    return res.status(400).json({ error: 'Invalid signature sent!' });
+  } catch (error) {
+    console.error("Cashfree verify error:", error?.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to verify Cashfree payment' });
   }
 });
 

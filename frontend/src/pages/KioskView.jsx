@@ -86,7 +86,7 @@ const KioskView = () => {
     }
   }, [step, jobId]);
 
-  const mobileUrl = `${window.location.protocol}//${window.location.hostname}:5173/m/${sessionId}`;
+  const mobileUrl = `${window.location.protocol}//${window.location.host}/m/${sessionId}`;
 
   const renderContent = () => {
     switch(step) {
