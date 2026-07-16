@@ -1,13 +1,38 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Printer } from 'lucide-react';
 
-import KioskView from './pages/KioskView';
-import MobileView from './pages/MobileView';
-import AdminDashboard from './pages/AdminDashboard';
-import ContactUs from './pages/ContactUs';
-import Terms from './pages/Terms';
-import Refunds from './pages/Refunds';
+const KioskView = React.lazy(() => import('./pages/KioskView'));
+const MobileView = React.lazy(() => import('./pages/MobileView'));
+const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard'));
+const ContactUs = React.lazy(() => import('./pages/ContactUs'));
+const Terms = React.lazy(() => import('./pages/Terms'));
+const Refunds = React.lazy(() => import('./pages/Refunds'));
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '2rem', textAlign: 'center', marginTop: '20vh' }}>
+          <h2>Something went wrong.</h2>
+          <p style={{ color: 'var(--text-muted)' }}>The application encountered an unexpected error.</p>
+          <button className="btn btn-primary" onClick={() => window.location.reload()}>Reload Page</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const AppLayout = ({ children }) => {
   const location = useLocation();
@@ -43,15 +68,19 @@ const App = () => {
   return (
     <Router>
       <AppLayout>
-        <Routes>
-          <Route path="/" element={<KioskView />} />
-          <Route path="/kiosk" element={<KioskView />} />
-          <Route path="/m/:sessionId" element={<MobileView />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/contact" element={<ContactUs />} />
-          <Route path="/terms" element={<Terms />} />
-          <Route path="/refunds" element={<Refunds />} />
-        </Routes>
+        <ErrorBoundary>
+          <Suspense fallback={<div style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh'}}>Loading...</div>}>
+            <Routes>
+              <Route path="/" element={<KioskView />} />
+              <Route path="/kiosk" element={<KioskView />} />
+              <Route path="/m/:sessionId" element={<MobileView />} />
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/contact" element={<ContactUs />} />
+              <Route path="/terms" element={<Terms />} />
+              <Route path="/refunds" element={<Refunds />} />
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
       </AppLayout>
     </Router>
   );

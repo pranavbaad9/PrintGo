@@ -71,6 +71,25 @@ const calculateEstimatedWaitTime = (jobId) => {
   return Math.max(waitTimeSeconds, 3);
 };
 
+// Cleanup abandoned jobs every 15 minutes (remove Pending Payment jobs older than 1 hour)
+setInterval(() => {
+  const oneHourAgo = Date.now() - 3600000;
+  const initialLength = jobs.length;
+  
+  // Modifying the original array in place to maintain reference
+  for (let i = jobs.length - 1; i >= 0; i--) {
+    const job = jobs[i];
+    if (job.status === 'Pending Payment' && new Date(job.createdAt).getTime() < oneHourAgo) {
+      jobs.splice(i, 1);
+    }
+  }
+
+  if (jobs.length !== initialLength) {
+    console.log(`🧹 Cleaned up ${initialLength - jobs.length} abandoned jobs from memory.`);
+    saveJobs();
+  }
+}, 15 * 60 * 1000);
+
 module.exports = {
   startPrintingProcess,
   calculateEstimatedWaitTime

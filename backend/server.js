@@ -10,7 +10,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*", // allow frontend access
+    origin: ["https://print-go-steel.vercel.app", "http://localhost:5173"],
     methods: ["GET", "POST", "PUT"]
   }
 });
@@ -23,7 +23,10 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
 
-app.use(cors());
+app.use(cors({
+  origin: ["https://print-go-steel.vercel.app", "http://localhost:5173"],
+  methods: ["GET", "POST", "PUT"]
+}));
 app.use(express.json());
 
 // Expose io to routes if needed
