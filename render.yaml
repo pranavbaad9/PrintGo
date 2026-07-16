@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: printgo-backend
+    env: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: ~18.0.0
+      - key: PORT
+        value: 10000
+      - key: CASHFREE_APP_ID
+        sync: false # Set this in Render Dashboard after deployment
+      - key: CASHFREE_SECRET_KEY
+        sync: false # Set this in Render Dashboard after deployment
