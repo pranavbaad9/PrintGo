@@ -21,7 +21,7 @@ const KioskView = () => {
     const id = uuidv4().substring(0, 8);
     setSessionId(id);
 
-    const newSocket = io(`${import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`}`);
+    const newSocket = io(`https://printgo-ssoi.onrender.com`);
     setSocket(newSocket);
 
     newSocket.emit('join_session', id);
@@ -71,7 +71,7 @@ const KioskView = () => {
     if (step === 5 && jobId) {
       const fetchJob = async () => {
         try {
-          const res = await axios.get(`${import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`}/api/jobs/${jobId}`);
+          const res = await axios.get(`https://printgo-ssoi.onrender.com/api/jobs/${jobId}`);
           if (res.data.success) {
             setJobStatus(res.data.job.status);
             setEta(res.data.job.eta);

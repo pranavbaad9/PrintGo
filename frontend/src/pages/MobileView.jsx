@@ -23,7 +23,7 @@ const MobileView = () => {
   const [price, setPrice] = useState(0);
 
   useEffect(() => {
-    const newSocket = io(`${import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`}`);
+    const newSocket = io(`https://printgo-ssoi.onrender.com`);
     setSocket(newSocket);
 
     newSocket.emit('join_session', sessionId);
@@ -109,7 +109,7 @@ const MobileView = () => {
     formData.append('file', file);
 
     try {
-      const response = await axios.post(`${import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`}/api/upload`, formData, {
+      const response = await axios.post(`https://printgo-ssoi.onrender.com/api/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       if (response.data.success) {
@@ -134,7 +134,7 @@ const MobileView = () => {
 
   const handlePrintSettingsSubmit = async () => {
     try {
-      const res = await axios.post(`${import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`}/api/jobs`, {
+      const res = await axios.post(`https://printgo-ssoi.onrender.com/api/jobs`, {
         file: fileData,
         settings,
         price
@@ -171,7 +171,7 @@ const MobileView = () => {
     }
 
     try {
-      const orderRes = await axios.post(`${import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`}/api/jobs/${jobId}/cashfree/order`);
+      const orderRes = await axios.post(`https://printgo-ssoi.onrender.com/api/jobs/${jobId}/cashfree/order`);
       if (!orderRes.data.success) return;
 
       const { paymentSessionId, orderId } = orderRes.data;
@@ -192,7 +192,7 @@ const MobileView = () => {
         if(result.paymentDetails){
             console.log("Payment completed, verifying...", result.paymentDetails);
             try {
-              await axios.post(`${import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`}/api/jobs/${jobId}/cashfree/verify`, {
+              await axios.post(`https://printgo-ssoi.onrender.com/api/jobs/${jobId}/cashfree/verify`, {
                 order_id: orderId
               });
               // Socket job_status_changed handles UI step update
@@ -210,7 +210,7 @@ const MobileView = () => {
 
   const handleSimulatePayment = async () => {
     try {
-      await axios.post(`${import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`}/api/jobs/${jobId}/pay`);
+      await axios.post(`https://printgo-ssoi.onrender.com/api/jobs/${jobId}/pay`);
       socket.emit('payment_success', { sessionId, jobId });
       setStep(4);
     } catch (err) {
