@@ -10,7 +10,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     const fetchJobs = async () => {
       try {
-        const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`}/api/jobs`);
+        const response = await axios.get(`https://printgo-ssoi.onrender.com/api/jobs`);
         if (response.data.success) {
           setJobs(response.data.jobs);
         }
@@ -20,13 +20,13 @@ const AdminDashboard = () => {
     };
     
     fetchJobs();
-    const interval = setInterval(fetchJobs, 2000);
+    const interval = setInterval(fetchJobs, 5000);
     return () => clearInterval(interval);
   }, []);
 
   const handleStatusChange = async (id, status) => {
     try {
-      await axios.put(`${import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`}/api/jobs/${id}/status`, { status });
+      await axios.put(`https://printgo-ssoi.onrender.com/api/jobs/${id}/status`, { status });
     } catch (err) {
       console.error('Failed to change status', err);
     }
@@ -40,7 +40,7 @@ const AdminDashboard = () => {
 
   const handleConfirmPayment = async (id) => {
     try {
-      await axios.post(`${import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:5000`}/api/jobs/${id}/pay`);
+      await axios.post(`https://printgo-ssoi.onrender.com/api/jobs/${id}/pay`);
       // The backend emits job_status_changed on this endpoint, which will auto-update the frontend
     } catch (err) {
       console.error('Failed to confirm payment', err);

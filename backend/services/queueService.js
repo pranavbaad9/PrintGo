@@ -79,7 +79,7 @@ setInterval(() => {
   // Modifying the original array in place to maintain reference
   for (let i = jobs.length - 1; i >= 0; i--) {
     const job = jobs[i];
-    if (job.status === 'Pending Payment' && new Date(job.createdAt).getTime() < oneHourAgo) {
+    if (job.status === 'Pending_Payment' && new Date(job.createdAt).getTime() < oneHourAgo) {
       jobs.splice(i, 1);
     }
   }

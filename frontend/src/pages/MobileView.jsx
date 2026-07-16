@@ -100,8 +100,8 @@ const MobileView = () => {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (file.size > 100 * 1024 * 1024) {
-      alert("File is too large! Maximum 100MB.");
+    if (file.size > 25 * 1024 * 1024) {
+      alert("File is too large! Maximum 25MB.");
       return;
     }
 
@@ -227,7 +227,7 @@ const MobileView = () => {
           <p className="text-muted mb-6">Select a file from your phone to print.</p>
           
           <label className="btn btn-primary" style={{ display: 'inline-block', cursor: 'pointer' }}>
-            Choose File (Max 100MB)
+            Choose File (Max 25MB)
             <input type="file" style={{ display: 'none' }} onChange={handleFileUpload} accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png" />
           </label>
         </div>
