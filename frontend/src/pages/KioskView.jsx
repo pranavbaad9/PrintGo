@@ -3,13 +3,14 @@ import { QRCodeSVG } from 'qrcode.react';
 import { io } from 'socket.io-client';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
-import { Smartphone, FileText, CheckCircle, Loader, Printer } from 'lucide-react';
+import { Smartphone, FileText, CheckCircle, Loader, Printer, Scan } from 'lucide-react';
+
+const API_URL = 'https://printgo-ssoi.onrender.com';
 
 const KioskView = () => {
   const [sessionId, setSessionId] = useState('');
   const [socket, setSocket] = useState(null);
-  const [step, setStep] = useState(1); // 1: QR, 2: Connected, 3: File, 4: Payment, 5: Queue
-  
+  const [step, setStep] = useState(1);
   const [fileData, setFileData] = useState(null);
   const [settingsData, setSettingsData] = useState(null);
   const [price, setPrice] = useState(0);
@@ -20,65 +21,38 @@ const KioskView = () => {
   useEffect(() => {
     const id = uuidv4().substring(0, 8);
     setSessionId(id);
-
-    const newSocket = io(`https://printgo-ssoi.onrender.com`);
+    const newSocket = io(API_URL);
     setSocket(newSocket);
-
     newSocket.emit('join_session', id);
 
-    newSocket.on('kiosk_user_connected', () => {
-      setStep(2); // User connected
-    });
-
-    newSocket.on('kiosk_file_uploaded', (data) => {
-      setFileData(data);
-      setStep(3); // File received
-    });
-
-    newSocket.on('kiosk_settings_updated', ({ settingsData, price }) => {
-      setSettingsData(settingsData);
-      setPrice(price);
-    });
-
-    newSocket.on('kiosk_payment_initiated', ({ price, jobId }) => {
-      setPrice(price);
-      setJobId(jobId);
-      setStep(4); // Payment UI
-    });
-
-    newSocket.on('kiosk_payment_success', ({ jobId }) => {
-      setStep(5); // Status UI
-    });
-
-    // Listen for queue updates
+    newSocket.on('kiosk_user_connected', () => setStep(2));
+    newSocket.on('kiosk_file_uploaded', (data) => { setFileData(data); setStep(3); });
+    newSocket.on('kiosk_settings_updated', ({ settingsData: s, price: p }) => { setSettingsData(s); setPrice(p); });
+    newSocket.on('kiosk_payment_initiated', ({ price: p, jobId: j }) => { setPrice(p); setJobId(j); setStep(4); });
+    newSocket.on('kiosk_payment_success', () => setStep(5));
     newSocket.on('job_status_changed', (job) => {
-      setJobId((currentJobId) => {
-        if (job.id === currentJobId) {
+      setJobId((cur) => {
+        if (job.id === cur) {
           setJobStatus(job.status);
-          if (job.status === 'Waiting' || job.status === 'Printing' || job.status === 'Completed') {
-            setStep(5);
-          }
+          if (['Waiting', 'Printing', 'Completed'].includes(job.status)) setStep(5);
         }
-        return currentJobId;
+        return cur;
       });
     });
 
     return () => newSocket.close();
   }, []);
 
-  // Poll ETA when in status screen
   useEffect(() => {
     if (step === 5 && jobId) {
       const fetchJob = async () => {
         try {
-          const res = await axios.get(`https://printgo-ssoi.onrender.com/api/jobs/${jobId}`);
+          const res = await axios.get(`${API_URL}/api/jobs/${jobId}`);
           if (res.data.success) {
             setJobStatus(res.data.job.status);
             setEta(res.data.job.eta);
           }
-        } catch (e) {
-          console.error(e);
-        }
+        } catch (e) { console.error(e); }
       };
       fetchJob();
       const interval = setInterval(fetchJob, 2000);
@@ -88,150 +62,203 @@ const KioskView = () => {
 
   const mobileUrl = `${window.location.protocol}//${window.location.host}/m/${sessionId}`;
 
+  const formatEta = (seconds) => {
+    if (!seconds) return 'calculating...';
+    if (seconds < 60) return `${seconds}s`;
+    return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  };
+
   const renderContent = () => {
-    switch(step) {
+    switch (step) {
       case 1:
         return (
-          <div className="text-center animate-fade-in">
-            <h1 className="text-4xl font-bold mb-4">Scan QR Code to Start Printing</h1>
-            <p className="text-xl text-muted mb-8">Use your phone's camera to connect instantly.</p>
-            <div className="p-8 bg-white inline-block rounded-2xl shadow-lg mb-8">
-              <QRCodeSVG value={mobileUrl} size={300} />
+          <div className="text-center animate-fade-in" style={{ maxWidth: 600, margin: '0 auto' }}>
+            <div style={{ marginBottom: '2rem' }}>
+              <div className="animate-float" style={{ display: 'inline-flex', padding: '1rem', background: 'var(--primary-50)', borderRadius: 'var(--radius-2xl)', marginBottom: '1.5rem' }}>
+                <Scan size={48} style={{ color: 'var(--primary-color)' }} />
+              </div>
+              <h1 className="text-4xl font-extrabold" style={{ marginBottom: '0.75rem', letterSpacing: '-0.03em' }}>
+                Scan to <span className="gradient-text">Print</span>
+              </h1>
+              <p className="text-lg text-muted" style={{ maxWidth: 400, margin: '0 auto' }}>
+                Point your phone's camera at the QR code to start printing instantly
+              </p>
             </div>
-            <div className="flex justify-center align-center gap-2 text-muted">
-              <Loader className="animate-spin" size={24} />
-              <p>Waiting for connection...</p>
+
+            <div className="qr-container" style={{ marginBottom: '2rem' }}>
+              <QRCodeSVG value={mobileUrl} size={260} level="H" />
+            </div>
+
+            <div className="flex align-center justify-center gap-3" style={{ color: 'var(--text-muted)' }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--primary-color)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+              <p className="text-sm font-medium">Waiting for connection...</p>
             </div>
           </div>
         );
+
       case 2:
         return (
-          <div className="text-center animate-fade-in">
-            <Smartphone size={80} className="mx-auto mb-6 text-primary-color" style={{ color: 'var(--primary-color)' }} />
-            <h1 className="text-4xl font-bold mb-4">Device Connected</h1>
-            <p className="text-xl text-muted mb-8">Please upload your document on your phone...</p>
-            <Loader className="animate-spin mx-auto text-muted" size={40} />
+          <div className="text-center animate-fade-in" style={{ maxWidth: 500, margin: '0 auto' }}>
+            <div className="success-circle" style={{ background: 'var(--primary-50)' }}>
+              <Smartphone size={40} style={{ color: 'var(--primary-color)' }} />
+            </div>
+            <div style={{ position: 'relative' }}>
+              <div className="success-circle" style={{ width: 48, height: 48, position: 'absolute', top: -70, right: 'calc(50% - 60px)' }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--success-500)' }} />
+              </div>
+            </div>
+            <h1 className="text-3xl font-bold" style={{ marginBottom: '0.5rem' }}>Device Connected</h1>
+            <p className="text-lg text-muted mb-8">Upload your document on your phone to continue</p>
+            <Loader size={28} className="animate-spin" style={{ color: 'var(--primary-300)', margin: '0 auto' }} />
           </div>
         );
+
       case 3:
         return (
-          <div className="animate-fade-in grid-2 w-full max-w-4xl mx-auto">
+          <div className="animate-fade-in grid-2 w-full" style={{ maxWidth: 900, margin: '0 auto' }}>
             <div className="glass-panel">
-              <div className="flex align-center gap-2 mb-6">
-                <CheckCircle size={32} style={{ color: 'var(--success-color)' }} />
-                <h2 className="text-2xl font-bold">Document Received</h2>
+              <div className="flex align-center gap-3 mb-6">
+                <div style={{ background: 'var(--success-50)', borderRadius: 'var(--radius-md)', padding: '8px', display: 'flex' }}>
+                  <CheckCircle size={22} style={{ color: 'var(--success-500)' }} />
+                </div>
+                <h2 className="text-xl font-bold">Document Received</h2>
               </div>
-              <div className="p-6 rounded-xl text-center mb-6" style={{ background: 'rgba(99, 102, 241, 0.1)' }}>
-                <FileText size={64} className="mx-auto mb-4 text-primary-color" style={{ color: 'var(--primary-color)' }} />
-                <h3 className="text-xl font-bold truncate" title={fileData?.originalName}>{fileData?.originalName}</h3>
-                <p className="text-muted mt-2">
-                  {(fileData?.size / (1024 * 1024)).toFixed(2)} MB • {fileData?.mimetype.split('/')[1].toUpperCase()}
+
+              <div style={{ background: 'var(--primary-50)', borderRadius: 'var(--radius-lg)', padding: '1.5rem', textAlign: 'center', marginBottom: '1.25rem' }}>
+                <FileText size={48} style={{ color: 'var(--primary-color)', marginBottom: '0.75rem' }} />
+                <h3 className="font-bold text-lg truncate" title={fileData?.originalName}>{fileData?.originalName}</h3>
+                <p className="text-sm text-muted" style={{ marginTop: '0.25rem' }}>
+                  {(fileData?.size / (1024 * 1024)).toFixed(2)} MB · {fileData?.mimetype?.split('/')[1]?.toUpperCase()}
                 </p>
               </div>
-              <div className="grid-2 gap-4">
-                <div className="p-4 rounded-lg bg-black bg-opacity-5" style={{ background: 'rgba(0,0,0,0.05)' }}>
-                  <p className="text-sm text-muted">Total Pages</p>
-                  <p className="text-2xl font-bold">{fileData?.pages}</p>
+
+              <div className="grid-2" style={{ gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div style={{ background: 'var(--gray-50)', borderRadius: 'var(--radius-md)', padding: '0.875rem' }}>
+                  <p className="text-xs text-muted" style={{ marginBottom: '0.125rem' }}>Pages</p>
+                  <p className="text-xl font-bold">{fileData?.pages}</p>
                 </div>
-                <div className="p-4 rounded-lg bg-black bg-opacity-5" style={{ background: 'rgba(0,0,0,0.05)' }}>
-                  <p className="text-sm text-muted">Status</p>
-                  <p className="text-lg font-bold" style={{ color: 'var(--success-color)' }}>Ready to Print</p>
+                <div style={{ background: 'var(--gray-50)', borderRadius: 'var(--radius-md)', padding: '0.875rem' }}>
+                  <p className="text-xs text-muted" style={{ marginBottom: '0.125rem' }}>Status</p>
+                  <p className="font-bold" style={{ color: 'var(--success-500)' }}>Ready</p>
                 </div>
               </div>
             </div>
-            
-            <div className="glass-panel flex flex-col justify-center">
-              <h3 className="text-xl font-bold mb-6">Live Print Settings</h3>
-              {settingsData ? (
-                <div className="space-y-4" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div className="flex justify-between p-3 border-b" style={{ borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
-                    <span className="text-muted">Color Mode</span>
-                    <span className="font-bold capitalize">{settingsData.color === 'bw' ? 'Black & White' : 'Color'}</span>
+
+            <div className="glass-panel flex" style={{ flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div>
+                <h3 className="text-xl font-bold mb-6">Live Settings</h3>
+                {settingsData ? (
+                  <div className="stagger-children" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {[
+                      ['Color', settingsData.color === 'bw' ? 'Black & White' : 'Color'],
+                      ['Sides', `${settingsData.duplex} Sided`],
+                      ['Copies', settingsData.copies],
+                      ['Pages', settingsData.pagesToPrint],
+                    ].map(([label, value]) => (
+                      <div key={label} className="flex justify-between" style={{ padding: '0.5rem 0', borderBottom: '1px solid var(--gray-100)' }}>
+                        <span className="text-muted text-sm">{label}</span>
+                        <span className="font-semibold text-sm capitalize">{value}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex justify-between p-3 border-b" style={{ borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
-                    <span className="text-muted">Sides</span>
-                    <span className="font-bold capitalize">{settingsData.duplex} Sided</span>
+                ) : (
+                  <div className="text-center" style={{ padding: '2rem 0' }}>
+                    <Loader size={24} className="animate-spin" style={{ color: 'var(--gray-300)', margin: '0 auto 0.75rem' }} />
+                    <p className="text-sm text-muted">Waiting for settings...</p>
                   </div>
-                  <div className="flex justify-between p-3 border-b" style={{ borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
-                    <span className="text-muted">Copies</span>
-                    <span className="font-bold">{settingsData.copies}</span>
-                  </div>
-                  <div className="flex justify-between p-3 border-b" style={{ borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
-                    <span className="text-muted">Pages to Print</span>
-                    <span className="font-bold">{settingsData.pagesToPrint}</span>
-                  </div>
-                  <div className="mt-6 p-6 rounded-xl text-center" style={{ background: 'var(--primary-gradient)', color: 'white' }}>
-                    <p className="text-sm opacity-80 mb-1">Total Cost</p>
-                    <p className="text-5xl font-bold">₹{price}</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center p-8">
-                  <Loader className="animate-spin mx-auto text-muted mb-4" size={32} />
-                  <p className="text-muted">Waiting for user to select settings...</p>
+                )}
+              </div>
+
+              {settingsData && (
+                <div className="price-card" style={{ marginTop: '1.25rem' }}>
+                  <p className="text-sm opacity-80" style={{ marginBottom: '0.25rem' }}>Total Cost</p>
+                  <p className="text-4xl font-extrabold">₹{price}</p>
                 </div>
               )}
             </div>
           </div>
         );
+
       case 4:
         return (
-          <div className="text-center animate-fade-in">
-            <h1 className="text-4xl font-bold mb-4">Complete Payment</h1>
-            <p className="text-xl text-muted mb-8">Please complete the payment securely on your mobile device.</p>
-            <div className="p-8 bg-white inline-block rounded-2xl shadow-lg mb-8">
-              <Loader className="animate-spin mx-auto text-primary-color mb-4" size={64} style={{ color: 'var(--primary-color)' }} />
-              <p className="text-lg font-bold">Waiting for payment confirmation...</p>
+          <div className="text-center animate-fade-in" style={{ maxWidth: 500, margin: '0 auto' }}>
+            <h1 className="text-3xl font-bold mb-4">Complete Payment</h1>
+            <p className="text-lg text-muted mb-8">Pay securely on your mobile device</p>
+
+            <div className="glass-panel" style={{ display: 'inline-block', padding: '2rem' }}>
+              <Loader size={48} className="animate-spin" style={{ color: 'var(--primary-color)', marginBottom: '1rem' }} />
+              <p className="font-semibold">Waiting for payment...</p>
             </div>
-            <div className="p-4 rounded-xl max-w-sm mx-auto" style={{ background: 'rgba(99, 102, 241, 0.1)' }}>
-              <p className="text-sm text-muted">Amount to Pay</p>
-              <p className="text-4xl font-bold" style={{ color: 'var(--primary-color)' }}>₹{price}</p>
-              <p className="text-xs text-muted mt-2">Order ID: #{jobId}</p>
+
+            <div className="price-card" style={{ maxWidth: 280, margin: '1.5rem auto 0' }}>
+              <p className="text-sm opacity-80">Amount</p>
+              <p className="text-4xl font-extrabold">₹{price}</p>
+              <p className="text-xs opacity-60" style={{ marginTop: '0.25rem' }}>Order #{jobId}</p>
             </div>
           </div>
         );
-      case 5:
-        const formatEta = (seconds) => {
-          if (!seconds) return 'calculating...';
-          if (seconds < 60) return `${seconds} seconds`;
-          return `${Math.floor(seconds / 60)} min ${seconds % 60} sec`;
-        };
-        
-        return (
-          <div className="text-center animate-fade-in">
-            {jobStatus === 'Waiting' && <Loader size={80} className="animate-spin text-warning-color mx-auto mb-6" />}
-            {jobStatus === 'Printing' && <Printer size={80} className="animate-pulse mx-auto mb-6" style={{ color: 'var(--primary-color)' }} />}
-            {jobStatus === 'Completed' && <CheckCircle size={80} className="mx-auto mb-6" style={{ color: 'var(--success-color)' }} />}
-            {jobStatus === 'Cancelled' && <CheckCircle size={80} className="mx-auto mb-6" style={{ color: 'var(--error-color)' }} />}
-            
-            <h1 className="text-4xl font-bold mb-4">
-              {jobStatus === 'Waiting' && 'In Print Queue'}
-              {jobStatus === 'Printing' && 'Printing Now...'}
-              {jobStatus === 'Completed' && 'Please Collect Your Documents'}
-              {jobStatus === 'Cancelled' && 'Job Cancelled'}
-            </h1>
-            
-            <p className="text-xl text-muted mb-8">
-              {jobStatus === 'Waiting' && `Queue #${jobId} - Estimated wait time: ${formatEta(eta)}`}
-              {jobStatus === 'Printing' && `Queue #${jobId} - Estimated time remaining: ${formatEta(eta)}`}
-              {jobStatus === 'Completed' && 'Thank you for using PrintGo!'}
-              {jobStatus === 'Cancelled' && 'Please contact the administrator.'}
-            </p>
 
+      case 5:
+        return (
+          <div className="text-center animate-fade-in" style={{ maxWidth: 500, margin: '0 auto' }}>
+            {jobStatus === 'Waiting' && (
+              <>
+                <div style={{ display: 'inline-flex', background: 'var(--warning-50)', borderRadius: '50%', padding: '1.25rem', marginBottom: '1.5rem' }}>
+                  <Loader size={48} className="animate-spin" style={{ color: 'var(--warning-500)' }} />
+                </div>
+                <h1 className="text-3xl font-bold mb-2">In Print Queue</h1>
+                <p className="text-lg text-muted">Estimated wait: {formatEta(eta)}</p>
+              </>
+            )}
+            {jobStatus === 'Printing' && (
+              <>
+                <div style={{ display: 'inline-flex', background: 'var(--primary-50)', borderRadius: '50%', padding: '1.25rem', marginBottom: '1.5rem' }}>
+                  <Printer size={48} className="animate-pulse" style={{ color: 'var(--primary-color)' }} />
+                </div>
+                <h1 className="text-3xl font-bold mb-2">Printing Now</h1>
+                <p className="text-lg text-muted">Time remaining: {formatEta(eta)}</p>
+              </>
+            )}
             {jobStatus === 'Completed' && (
-              <button className="btn btn-primary" onClick={() => window.location.reload()}>
-                Start New Session
-              </button>
+              <>
+                <div className="success-circle">
+                  <CheckCircle size={48} style={{ color: 'var(--success-500)' }} />
+                </div>
+                <h1 className="text-3xl font-bold mb-2">Collect Your Documents</h1>
+                <p className="text-lg text-muted mb-8">Thank you for using PrintGo!</p>
+                <button className="btn btn-primary" onClick={() => window.location.reload()}>
+                  Start New Session
+                </button>
+              </>
+            )}
+            {jobStatus === 'Cancelled' && (
+              <>
+                <div style={{ display: 'inline-flex', background: 'var(--error-50)', borderRadius: '50%', padding: '1.25rem', marginBottom: '1.5rem' }}>
+                  <CheckCircle size={48} style={{ color: 'var(--error-500)' }} />
+                </div>
+                <h1 className="text-3xl font-bold mb-2">Job Cancelled</h1>
+                <p className="text-lg text-muted">Please contact the administrator.</p>
+              </>
             )}
           </div>
         );
+
       default:
         return null;
     }
   };
 
   return (
-    <div style={{ minHeight: '80vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ minHeight: '70vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+      {/* Step Indicator */}
+      <div className="flex gap-2 align-center" style={{ marginBottom: '2rem' }}>
+        {[1, 2, 3, 4, 5].map((s) => (
+          <div
+            key={s}
+            className={`step-dot ${step === s ? 'active' : ''} ${step > s ? 'completed' : ''}`}
+          />
+        ))}
+      </div>
       {renderContent()}
     </div>
   );

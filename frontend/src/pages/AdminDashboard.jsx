@@ -3,197 +3,161 @@ import axios from 'axios';
 import { Activity, DollarSign, Printer, List, XCircle, CheckCircle, Droplet, File, Search, RefreshCw, Download } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
+const API_URL = 'https://printgo-ssoi.onrender.com';
+
 const AdminDashboard = () => {
   const [jobs, setJobs] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   useEffect(() => {
     const fetchJobs = async () => {
       try {
-        const response = await axios.get(`https://printgo-ssoi.onrender.com/api/jobs`);
-        if (response.data.success) {
-          setJobs(response.data.jobs);
-        }
-      } catch (err) {
-        console.error('Failed to fetch jobs', err);
-      }
+        const response = await axios.get(`${API_URL}/api/jobs`);
+        if (response.data.success) setJobs(response.data.jobs);
+      } catch (err) { console.error('Failed to fetch jobs', err); }
     };
-    
     fetchJobs();
     const interval = setInterval(fetchJobs, 5000);
     return () => clearInterval(interval);
   }, []);
 
   const handleStatusChange = async (id, status) => {
-    try {
-      await axios.put(`https://printgo-ssoi.onrender.com/api/jobs/${id}/status`, { status });
-    } catch (err) {
-      console.error('Failed to change status', err);
-    }
+    try { await axios.put(`${API_URL}/api/jobs/${id}/status`, { status }); }
+    catch (err) { console.error('Failed to change status', err); }
   };
 
-  const handleReprint = async (id) => {
-    if(window.confirm("Are you sure you want to reprint this job? It will be added to the queue.")) {
-       handleStatusChange(id, 'Waiting');
-    }
+  const handleReprint = (id) => {
+    if (window.confirm('Reprint this job?')) handleStatusChange(id, 'Waiting');
   };
 
   const handleConfirmPayment = async (id) => {
-    try {
-      await axios.post(`https://printgo-ssoi.onrender.com/api/jobs/${id}/pay`);
-      // The backend emits job_status_changed on this endpoint, which will auto-update the frontend
-    } catch (err) {
-      console.error('Failed to confirm payment', err);
-    }
+    try { await axios.post(`${API_URL}/api/jobs/${id}/pay`); }
+    catch (err) { console.error('Failed to confirm payment', err); }
   };
 
   const totalEarnings = jobs
     .filter(j => j.status !== 'Pending_Payment' && j.status !== 'Cancelled')
     .reduce((sum, j) => sum + j.price, 0);
-    
-  const jobsToday = jobs.length;
+
   const completedJobs = jobs.filter(j => j.status === 'Completed').length;
-  const failedJobs = jobs.filter(j => j.status === 'Cancelled').length;
-  
   const pendingPayments = jobs.filter(j => j.status === 'Pending_Payment');
   const queue = jobs.filter(j => j.status === 'Waiting' || j.status === 'Printing');
 
-  const filteredJobs = jobs.filter(j => 
-    j.id.toLowerCase().includes(searchQuery.toLowerCase()) || 
+  const filteredJobs = jobs.filter(j =>
+    j.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (j.file?.originalName && j.file.originalName.toLowerCase().includes(searchQuery.toLowerCase()))
-  ).reverse(); // Newest first
+  ).reverse();
 
-  // Real data for the chart based on jobs history today
   const generateChartData = () => {
     const todayStr = new Date().toISOString().split('T')[0];
-    const todaysJobs = jobs.filter(j => j.createdAt && j.createdAt.startsWith(todayStr) && j.status !== 'Pending_Payment' && j.status !== 'Cancelled');
-    
+    const todaysJobs = jobs.filter(j => j.createdAt?.startsWith(todayStr) && j.status !== 'Pending_Payment' && j.status !== 'Cancelled');
     const hourlyRevenue = {};
     const currentHour = new Date().getHours();
-    
-    for (let i = currentHour - 4; i <= currentHour; i++) {
-      if (i >= 0) {
-        hourlyRevenue[`${i.toString().padStart(2, '0')}:00`] = 0;
-      }
+    for (let i = Math.max(0, currentHour - 4); i <= currentHour; i++) {
+      hourlyRevenue[`${i.toString().padStart(2, '0')}:00`] = 0;
     }
-
     todaysJobs.forEach(job => {
-      const date = new Date(job.createdAt);
-      const hourStr = `${date.getHours().toString().padStart(2, '0')}:00`;
-      if (hourlyRevenue[hourStr] !== undefined) {
-        hourlyRevenue[hourStr] += job.price;
-      } else {
-        hourlyRevenue[hourStr] = job.price; 
-      }
+      const hourStr = `${new Date(job.createdAt).getHours().toString().padStart(2, '0')}:00`;
+      hourlyRevenue[hourStr] = (hourlyRevenue[hourStr] || 0) + job.price;
     });
-
-    return Object.keys(hourlyRevenue)
-      .sort()
-      .map(time => ({ time, revenue: hourlyRevenue[time] }));
+    return Object.keys(hourlyRevenue).sort().map(time => ({ time, revenue: hourlyRevenue[time] }));
   };
 
   const chartData = generateChartData();
-
-  // Mock hardware stats calculation based on jobs today
   const paperLeft = Math.max(0, 500 - jobs.reduce((sum, j) => sum + (j.file?.pages || 0), 0));
   const inkLevel = Math.max(0, 100 - (jobs.length * 2));
 
   return (
-    <div className="container" style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      <div className="flex justify-between align-center mb-6">
-        <h2 className="text-3xl font-bold">Admin Dashboard</h2>
-        <button className="btn flex align-center gap-2" style={{ background: 'var(--success-color)' }} onClick={() => alert("Report downloaded!")}>
-          <Download size={18} /> Download Reports
+    <div style={{ maxWidth: 1100, margin: '0 auto', width: '100%' }}>
+      {/* Header */}
+      <div className="flex justify-between align-center mb-6" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
+        <h2 className="text-2xl font-bold">Dashboard</h2>
+        <button className="btn" style={{ background: 'var(--success-50)', color: 'var(--success-600)', border: '1px solid rgba(16,185,129,0.2)' }} onClick={() => alert('Report downloaded!')}>
+          <Download size={16} /> Export
         </button>
       </div>
-      
-      {/* Stats Cards */}
-      <div className="grid-2 mb-8" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
-        <div className="glass-panel flex align-center gap-4">
-          <div className="p-4 rounded-full" style={{ background: 'rgba(99, 102, 241, 0.15)' }}>
-            <DollarSign style={{ color: 'var(--primary-color)' }} size={32} />
+
+      {/* Stats */}
+      <div className="stagger-children" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+        <div className="stat-card">
+          <div className="stat-icon" style={{ background: 'var(--primary-50)' }}>
+            <DollarSign size={22} style={{ color: 'var(--primary-color)' }} />
           </div>
           <div>
-            <p className="text-muted">Today's Revenue</p>
-            <p className="text-3xl font-bold">₹{totalEarnings}</p>
+            <p className="text-xs text-muted" style={{ marginBottom: '0.125rem' }}>Revenue</p>
+            <p className="text-2xl font-bold">₹{totalEarnings}</p>
           </div>
         </div>
-        
-        <div className="glass-panel flex align-center gap-4">
-          <div className="p-4 rounded-full" style={{ background: 'rgba(16, 185, 129, 0.15)' }}>
-            <Activity style={{ color: 'var(--success-color)' }} size={32} />
+
+        <div className="stat-card">
+          <div className="stat-icon" style={{ background: 'var(--success-50)' }}>
+            <Activity size={22} style={{ color: 'var(--success-500)' }} />
           </div>
           <div>
-            <p className="text-muted">Jobs Processed</p>
-            <p className="text-3xl font-bold">{completedJobs}</p>
+            <p className="text-xs text-muted" style={{ marginBottom: '0.125rem' }}>Completed</p>
+            <p className="text-2xl font-bold">{completedJobs}</p>
           </div>
         </div>
-        
-        <div className="glass-panel flex align-center gap-4">
-          <div className="p-4 rounded-full" style={{ background: 'rgba(239, 68, 68, 0.15)' }}>
-            <Droplet style={{ color: 'var(--error-color)' }} size={32} />
+
+        <div className="stat-card">
+          <div className="stat-icon" style={{ background: 'var(--error-50)' }}>
+            <Droplet size={22} style={{ color: 'var(--error-500)' }} />
           </div>
           <div>
-            <p className="text-muted">Ink / Toner</p>
-            <p className="text-3xl font-bold">{inkLevel}%</p>
+            <p className="text-xs text-muted" style={{ marginBottom: '0.125rem' }}>Ink/Toner</p>
+            <p className="text-2xl font-bold">{inkLevel}%</p>
           </div>
         </div>
-        
-        <div className="glass-panel flex align-center gap-4">
-          <div className="p-4 rounded-full" style={{ background: 'rgba(245, 158, 11, 0.15)' }}>
-            <File style={{ color: '#d97706' }} size={32} />
+
+        <div className="stat-card">
+          <div className="stat-icon" style={{ background: 'var(--warning-50)' }}>
+            <File size={22} style={{ color: 'var(--warning-600)' }} />
           </div>
           <div>
-            <p className="text-muted">Paper Status</p>
-            <p className="text-3xl font-bold">{paperLeft} <span className="text-sm font-normal">sheets</span></p>
+            <p className="text-xs text-muted" style={{ marginBottom: '0.125rem' }}>Paper</p>
+            <p className="text-2xl font-bold">{paperLeft}<span className="text-xs font-medium text-muted"> sheets</span></p>
           </div>
         </div>
       </div>
-      
-      {/* Analytics Chart */}
-      <div className="glass-panel mb-8" style={{ height: '350px' }}>
-        <h3 className="text-xl font-bold mb-4">Revenue Trend (Today)</h3>
-        <ResponsiveContainer width="100%" height="100%" minHeight={250}>
-          <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.05)" />
-            <XAxis dataKey="time" stroke="var(--text-muted)" />
-            <YAxis stroke="var(--text-muted)" />
-            <Tooltip 
-              contentStyle={{ background: 'var(--bg-main)', border: '1px solid var(--glass-border)', borderRadius: '12px' }}
-              itemStyle={{ color: 'var(--primary-color)', fontWeight: 'bold' }}
+
+      {/* Chart */}
+      <div className="glass-panel mb-6" style={{ height: 300 }}>
+        <h3 className="font-bold mb-4">Revenue Trend</h3>
+        <ResponsiveContainer width="100%" height="85%">
+          <LineChart data={chartData} margin={{ top: 5, right: 16, bottom: 5, left: -10 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--gray-100)" />
+            <XAxis dataKey="time" stroke="var(--gray-400)" fontSize={12} />
+            <YAxis stroke="var(--gray-400)" fontSize={12} />
+            <Tooltip
+              contentStyle={{ background: 'white', border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md)', fontSize: '0.875rem' }}
+              itemStyle={{ color: 'var(--primary-color)', fontWeight: 600 }}
             />
-            <Line type="monotone" dataKey="revenue" stroke="var(--primary-color)" strokeWidth={3} dot={{ r: 5, fill: 'var(--primary-color)' }} activeDot={{ r: 8 }} />
+            <Line type="monotone" dataKey="revenue" stroke="var(--primary-color)" strokeWidth={2.5} dot={{ r: 4, fill: 'var(--primary-color)', strokeWidth: 0 }} activeDot={{ r: 6, strokeWidth: 2, stroke: 'white' }} />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Pending Payments Queue */}
+      {/* Pending Payments */}
       {pendingPayments.length > 0 && (
-        <div className="glass-panel mb-8 border border-warning-color" style={{ border: '2px solid var(--warning-color)' }}>
+        <div className="glass-panel mb-6 animate-fade-in" style={{ border: '1.5px solid rgba(245, 158, 11, 0.3)' }}>
           <div className="flex align-center gap-2 mb-4">
-            <DollarSign style={{ color: 'var(--warning-color)' }} />
-            <h3 className="text-xl font-bold">Action Required: Pending Payments</h3>
+            <div className="stat-icon" style={{ background: 'var(--warning-50)', width: 32, height: 32 }}>
+              <DollarSign size={16} style={{ color: 'var(--warning-600)' }} />
+            </div>
+            <h3 className="font-bold">Pending Payments ({pendingPayments.length})</h3>
           </div>
-          <div className="flex flex-col gap-2">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {pendingPayments.map(job => (
-              <div key={job.id} className="p-4 rounded-lg flex justify-between align-center bg-white shadow-sm">
+              <div key={job.id} className="job-row" style={{ background: 'white' }}>
                 <div>
-                  <p className="font-bold text-lg">#{job.id} - Verify ₹{job.price}</p>
-                  <p className="text-sm text-muted">{job.file?.originalName} • {job.settings?.color === 'color' ? 'Color' : 'B&W'} • {job.settings?.copies} Copies</p>
+                  <p className="font-bold">#{job.id} — ₹{job.price}</p>
+                  <p className="text-xs text-muted">{job.file?.originalName} · {job.settings?.copies} copies</p>
                 </div>
-                <div className="flex align-center gap-2">
-                  <button 
-                    onClick={() => handleConfirmPayment(job.id)}
-                    className="btn" 
-                    style={{ background: 'var(--success-color)', color: 'white', padding: '0.5rem 1rem' }}
-                  >
-                    Confirm Payment Received
+                <div className="flex gap-2">
+                  <button onClick={() => handleConfirmPayment(job.id)} className="btn" style={{ background: 'var(--success-500)', color: 'white', border: 'none', padding: '0.375rem 0.75rem', fontSize: '0.8125rem' }}>
+                    Confirm
                   </button>
-                  <button 
-                    onClick={() => handleStatusChange(job.id, 'Cancelled')}
-                    className="btn" 
-                    style={{ background: 'var(--error-color)', color: 'white', padding: '0.5rem 1rem' }}
-                  >
+                  <button onClick={() => handleStatusChange(job.id, 'Cancelled')} className="btn" style={{ background: 'var(--error-50)', color: 'var(--error-600)', border: '1px solid rgba(239,68,68,0.2)', padding: '0.375rem 0.75rem', fontSize: '0.8125rem' }}>
                     Cancel
                   </button>
                 </div>
@@ -204,43 +168,36 @@ const AdminDashboard = () => {
       )}
 
       <div className="grid-2">
-        {/* Print Queue */}
+        {/* Active Queue */}
         <div className="glass-panel">
           <div className="flex align-center gap-2 mb-4">
-            <Printer style={{ color: 'var(--primary-color)' }} />
-            <h3 className="text-xl font-bold">Active Live Jobs</h3>
+            <div className="stat-icon" style={{ background: 'var(--primary-50)', width: 32, height: 32 }}>
+              <Printer size={16} style={{ color: 'var(--primary-color)' }} />
+            </div>
+            <h3 className="font-bold">Active Queue</h3>
           </div>
-          
+
           {queue.length === 0 ? (
-            <p className="text-muted p-4 text-center">Queue is currently empty.</p>
+            <div className="text-center" style={{ padding: '2rem', color: 'var(--gray-400)' }}>
+              <Printer size={32} style={{ margin: '0 auto 0.5rem', opacity: 0.3 }} />
+              <p className="text-sm">No active jobs</p>
+            </div>
           ) : (
-            <div className="flex flex-col gap-2" style={{ flexDirection: 'column' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {queue.map(job => (
-                <div key={job.id} className="p-4 rounded-lg flex justify-between align-center" style={{ background: 'rgba(0,0,0,0.05)' }}>
+                <div key={job.id} className="job-row">
                   <div>
-                    <p className="font-bold">#{job.id} - {job.file?.originalName}</p>
-                    <p className="text-sm text-muted">{job.settings?.copies} Copies • {job.settings?.color === 'color' ? 'Color' : 'B&W'}</p>
+                    <p className="font-semibold text-sm">#{job.id} — {job.file?.originalName}</p>
+                    <p className="text-xs text-muted">{job.settings?.copies} copies · {job.settings?.color === 'color' ? 'Color' : 'B&W'}</p>
                   </div>
                   <div className="flex align-center gap-2">
-                    <span className={`badge ${job.status === 'Printing' ? 'badge-printing' : 'badge-pending'}`}>
-                      {job.status}
-                    </span>
-                    <button 
-                      onClick={() => handleStatusChange(job.id, 'Cancelled')}
-                      className="p-1 rounded text-muted hover:bg-gray-200" 
-                      title="Cancel Job"
-                      style={{ cursor: 'pointer', border: 'none', background: 'transparent' }}
-                    >
-                      <XCircle size={20} style={{ color: 'var(--error-color)' }} />
+                    <span className={`badge badge-${job.status.toLowerCase()}`}>{job.status}</span>
+                    <button onClick={() => handleStatusChange(job.id, 'Cancelled')} title="Cancel" style={{ cursor: 'pointer', border: 'none', background: 'transparent', padding: '4px', borderRadius: 'var(--radius-sm)' }}>
+                      <XCircle size={18} style={{ color: 'var(--error-500)' }} />
                     </button>
                     {job.status === 'Printing' && (
-                      <button 
-                        onClick={() => handleStatusChange(job.id, 'Completed')}
-                        className="p-1 rounded text-muted hover:bg-gray-200" 
-                        title="Force Complete"
-                        style={{ cursor: 'pointer', border: 'none', background: 'transparent' }}
-                      >
-                        <CheckCircle size={20} style={{ color: 'var(--success-color)' }} />
+                      <button onClick={() => handleStatusChange(job.id, 'Completed')} title="Complete" style={{ cursor: 'pointer', border: 'none', background: 'transparent', padding: '4px', borderRadius: 'var(--radius-sm)' }}>
+                        <CheckCircle size={18} style={{ color: 'var(--success-500)' }} />
                       </button>
                     )}
                   </div>
@@ -250,50 +207,46 @@ const AdminDashboard = () => {
           )}
         </div>
 
-        {/* All Jobs / Payment History */}
+        {/* Job History */}
         <div className="glass-panel">
-          <div className="flex justify-between align-center mb-4">
+          <div className="flex justify-between align-center mb-4" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
             <div className="flex align-center gap-2">
-              <List style={{ color: 'var(--primary-color)' }} />
-              <h3 className="text-xl font-bold">Job History</h3>
+              <div className="stat-icon" style={{ background: 'var(--gray-100)', width: 32, height: 32 }}>
+                <List size={16} style={{ color: 'var(--gray-600)' }} />
+              </div>
+              <h3 className="font-bold">History</h3>
             </div>
-            <div className="flex align-center gap-2 px-3 py-1 rounded bg-white shadow-sm" style={{ border: '1px solid var(--glass-border)' }}>
-              <Search size={16} className="text-muted" />
-              <input 
-                type="text" 
-                placeholder="Search jobs..." 
-                className="bg-transparent border-none outline-none text-sm"
+            <div className="flex align-center gap-2" style={{ background: 'var(--gray-50)', border: '1.5px solid var(--gray-200)', borderRadius: 'var(--radius-md)', padding: '0.375rem 0.75rem' }}>
+              <Search size={14} style={{ color: 'var(--gray-400)' }} />
+              <input
+                type="text"
+                placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: '0.8125rem', width: 100, color: 'var(--text-main)', fontFamily: 'inherit' }}
               />
             </div>
           </div>
-          
-          <div className="flex flex-col gap-2" style={{ flexDirection: 'column', maxHeight: '400px', overflowY: 'auto' }}>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.375rem', maxHeight: 360, overflowY: 'auto' }}>
             {filteredJobs.length === 0 ? (
-              <p className="text-muted p-4 text-center">No jobs found.</p>
+              <p className="text-muted text-sm text-center" style={{ padding: '2rem' }}>No jobs found</p>
             ) : (
               filteredJobs.map(job => (
-                <div key={job.id} className="p-4 rounded-lg flex justify-between align-center" style={{ background: 'rgba(0,0,0,0.05)' }}>
+                <div key={job.id} className="job-row">
                   <div>
-                    <p className="font-bold flex align-center gap-2">
-                      #{job.id} <span className="text-muted text-sm font-normal">₹{job.price}</span>
-                      {job.status === 'Cancelled' && <span className="text-xs px-2 rounded bg-red-100 text-red-600">Failed</span>}
+                    <p className="font-semibold text-sm flex align-center gap-2">
+                      #{job.id} <span className="text-xs text-muted font-medium">₹{job.price}</span>
                     </p>
-                    <p className="text-sm text-muted truncate max-w-[200px]" title={job.file?.originalName}>{job.file?.originalName}</p>
+                    <p className="text-xs text-muted truncate" style={{ maxWidth: 180 }} title={job.file?.originalName}>{job.file?.originalName}</p>
                   </div>
                   <div className="flex align-center gap-2">
                     <span className={`badge badge-${job.status.toLowerCase().replace('_', '-')}`}>
                       {job.status.replace('_', ' ')}
                     </span>
                     {(job.status === 'Completed' || job.status === 'Cancelled') && (
-                      <button 
-                        onClick={() => handleReprint(job.id)}
-                        className="p-1 rounded text-muted hover:bg-gray-200 ml-2" 
-                        title="Reprint Job"
-                        style={{ cursor: 'pointer', border: 'none', background: 'transparent' }}
-                      >
-                        <RefreshCw size={16} style={{ color: 'var(--primary-color)' }} />
+                      <button onClick={() => handleReprint(job.id)} title="Reprint" style={{ cursor: 'pointer', border: 'none', background: 'transparent', padding: '4px', borderRadius: 'var(--radius-sm)' }}>
+                        <RefreshCw size={14} style={{ color: 'var(--primary-color)' }} />
                       </button>
                     )}
                   </div>
