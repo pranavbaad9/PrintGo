@@ -3,13 +3,14 @@ import { QRCodeSVG } from 'qrcode.react';
 import { io } from 'socket.io-client';
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
-import { Smartphone, FileText, CheckCircle, Loader, Printer, Scan } from 'lucide-react';
+import { Smartphone, FileText, CheckCircle, Loader, Printer, Scan, WifiOff } from 'lucide-react';
 
-const API_URL = 'https://printgo-ssoi.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'https://printgo-ssoi.onrender.com';
 
 const KioskView = () => {
   const [sessionId, setSessionId] = useState('');
   const [socket, setSocket] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
   const [step, setStep] = useState(1);
   const [fileData, setFileData] = useState(null);
   const [settingsData, setSettingsData] = useState(null);
@@ -23,7 +24,12 @@ const KioskView = () => {
     setSessionId(id);
     const newSocket = io(API_URL);
     setSocket(newSocket);
-    newSocket.emit('join_session', id);
+    
+    newSocket.on('connect', () => {
+      setIsConnected(true);
+      newSocket.emit('join_session', id);
+    });
+    newSocket.on('disconnect', () => setIsConnected(false));
 
     newSocket.on('kiosk_user_connected', () => setStep(2));
     newSocket.on('kiosk_file_uploaded', (data) => { setFileData(data); setStep(3); });
@@ -32,7 +38,7 @@ const KioskView = () => {
     newSocket.on('kiosk_payment_success', () => setStep(5));
     newSocket.on('job_status_changed', (job) => {
       setJobId((cur) => {
-        if (job.id === cur) {
+        if (job.shortId === cur) {
           setJobStatus(job.status);
           if (['Waiting', 'Printing', 'Completed'].includes(job.status)) setStep(5);
         }
@@ -42,6 +48,17 @@ const KioskView = () => {
 
     return () => newSocket.close();
   }, []);
+
+  // Inactivity timeout
+  useEffect(() => {
+    let timeout;
+    if (step > 1 && step < 5) {
+      timeout = setTimeout(() => {
+        window.location.reload(); // Auto-reset for next customer
+      }, 3 * 60 * 1000); // 3 minutes inactivity
+    }
+    return () => clearTimeout(timeout);
+  }, [step, fileData, settingsData, price, jobId]);
 
   useEffect(() => {
     if (step === 5 && jobId) {
@@ -249,7 +266,13 @@ const KioskView = () => {
   };
 
   return (
-    <div style={{ minHeight: '70vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+    <div style={{ minHeight: '70vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', position: 'relative' }}>
+      {!isConnected && (
+        <div style={{ position: 'absolute', top: -20, left: '50%', transform: 'translateX(-50%)', background: 'var(--error-500)', color: 'white', padding: '0.5rem 1rem', borderRadius: 'var(--radius-full)', display: 'flex', alignItems: 'center', gap: '0.5rem', zIndex: 50, boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)' }}>
+          <WifiOff size={16} />
+          <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Offline Mode. Trying to reconnect...</span>
+        </div>
+      )}
       {/* Step Indicator */}
       <div className="flex gap-2 align-center" style={{ marginBottom: '2rem' }}>
         {[1, 2, 3, 4, 5].map((s) => (

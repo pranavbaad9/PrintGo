@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+  // For production with PostgreSQL, change provider to "postgresql"
+}
+
+model AdminUser {
+  id        String   @id @default(uuid())
+  username  String   @unique
+  password  String
+  role      String   @default("ADMIN") // ADMIN, SUPERADMIN
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Job {
+  id              String   @id @default(uuid())
+  shortId         String   @unique // The 8-character ID used in Kiosk
+  status          String   @default("Pending_Payment") // Pending_Payment, Waiting, Printing, Completed, Cancelled
+  price           Float
+  
+  // File details
+  originalName    String
+  filename        String
+  mimetype        String
+  size            Int
+  pages           Int
+
+  // Settings
+  color           String   @default("bw") // bw, color
+  duplex          String   @default("single") // single, double
+  copies          Int      @default(1)
+  pagesToPrint    Int      @default(1)
+  pageRangeType   String   @default("all") // all, custom
+  customRange     String?
+  
+  // Payment specifics
+  cashfreeOrderId String?  @unique
+  paymentSessionId String?
+  paymentStatus   String   @default("PENDING") // PENDING, PAID, FAILED, REFUNDED
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

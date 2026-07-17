@@ -1,6 +1,9 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const cookieParser = require('cookie-parser');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -10,12 +13,31 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ["https://print-go-steel.vercel.app", "http://localhost:5173"],
-    methods: ["GET", "POST", "PUT"]
+    origin: ["https://print-go-steel.vercel.app", "http://localhost:5173", "http://localhost:4173"],
+    methods: ["GET", "POST", "PUT"],
+    credentials: true
   }
 });
 
 const port = process.env.PORT || 5000;
+
+// Security Middlewares
+app.use(helmet());
+app.use(cors({
+  origin: ["https://print-go-steel.vercel.app", "http://localhost:5173", "http://localhost:4173"],
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true
+}));
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per window
+  message: 'Too many requests, please try again later.'
+});
+app.use('/api/', apiLimiter);
+
+app.use(express.json());
+app.use(cookieParser());
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -23,24 +45,24 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
 
-app.use(cors({
-  origin: ["https://print-go-steel.vercel.app", "http://localhost:5173"],
-  methods: ["GET", "POST", "PUT"]
-}));
-app.use(express.json());
-
 // Expose io to routes if needed
 app.set('io', io);
 
 // Routes
+const authRouter = require('./routes/auth');
 const jobsRouter = require('./routes/jobs');
 const uploadRouter = require('./routes/upload');
 
+app.use('/api/auth', authRouter);
 app.use('/api/jobs', jobsRouter);
 app.use('/api/upload', uploadRouter);
 
 // Serve uploads statically (for preview if needed)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Global Error Handler
+const { errorHandler } = require('./middlewares/error');
+app.use(errorHandler);
 
 // Socket.IO Logic
 io.on('connection', (socket) => {
@@ -54,7 +76,6 @@ io.on('connection', (socket) => {
 
   // Mobile connects to session
   socket.on('mobile_connected', (sessionId) => {
-    // Notify kiosk
     io.to(sessionId).emit('kiosk_user_connected');
   });
 
@@ -84,5 +105,5 @@ io.on('connection', (socket) => {
 });
 
 server.listen(port, () => {
-  console.log(`PrintGo backend listening at http://localhost:${port}`);
+  console.log(`Enterprise PrintGo backend listening at http://localhost:${port}`);
 });

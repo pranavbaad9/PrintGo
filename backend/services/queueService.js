@@ -1,92 +1,109 @@
-const { jobs, saveJobs } = require('../data/jobsData');
+const prisma = require('../utils/prisma');
 
-// Helper to simulate the printing process
-const startPrintingProcess = (jobId, io) => {
-  const job = jobs.find(j => j.id === jobId);
-  if (!job) return;
+const startPrintingProcess = async (shortId, io) => {
+  try {
+    const job = await prisma.job.findUnique({ where: { shortId } });
+    if (!job) return;
 
-  // Simulate print time: 2 seconds per page
-  const pagesToPrint = job.settings?.pagesToPrint || job.file?.pages || 1;
-  const copies = job.settings?.copies || 1;
-  const printTimeMs = pagesToPrint * copies * 2000;
+    // Simulate print time: 2 seconds per page
+    const pagesToPrint = job.pagesToPrint || job.pages || 1;
+    const copies = job.copies || 1;
+    const printTimeMs = pagesToPrint * copies * 2000;
 
-  // After 2 seconds, move to printing
-  setTimeout(() => {
-    if (job.status === 'Waiting') {
-      job.status = 'Printing';
-      saveJobs();
-      if(io) {
-        io.emit('job_status_changed', job);
-        // Emit to the physical printer agent
-        io.emit('physical_print_job', {
-          jobId: job.id,
-          fileUrl: `/uploads/${job.file.filename}`, // Relative URL
-          originalName: job.file.originalName,
-          settings: job.settings,
-          price: job.price
+    // Wait 2 seconds before printing
+    setTimeout(async () => {
+      const currentJob = await prisma.job.findUnique({ where: { shortId } });
+      if (currentJob && currentJob.status === 'Waiting') {
+        const updatedJob = await prisma.job.update({
+          where: { shortId },
+          data: { status: 'Printing' }
         });
-      }
-      console.log(`Job ${jobId} is now Printing...`);
-      
-      // After calculated print time, move to completed
-      setTimeout(() => {
-        if (job.status === 'Printing') { // Admin might have cancelled it
-          job.status = 'Completed';
-          saveJobs();
-          if(io) io.emit('job_status_changed', job);
-          console.log(`Job ${jobId} is now Completed!`);
-
-          // WhatsApp Mock
-          if (job.settings?.notifyWhatsApp && job.settings?.phoneNumber) {
-            console.log(`\n======================================================`);
-            console.log(`✅ [WHATSAPP MOCK] Message sent to ${job.settings.phoneNumber}`);
-            console.log(`Message: "Hello! Your print job #${job.id} is completed and ready for pickup at PrintGo!"`);
-            console.log(`======================================================\n`);
-          }
+        
+        if (io) {
+          io.emit('job_status_changed', updatedJob);
+          // Emit to the physical printer agent
+          io.emit('physical_print_job', {
+            jobId: updatedJob.shortId,
+            fileUrl: `/uploads/${updatedJob.filename}`,
+            originalName: updatedJob.originalName,
+            settings: {
+              color: updatedJob.color,
+              duplex: updatedJob.duplex,
+              copies: updatedJob.copies
+            },
+            price: updatedJob.price
+          });
         }
-      }, printTimeMs);
-    }
-  }, 2000);
+        console.log(`Job ${shortId} is now Printing...`);
+        
+        // After calculated print time, move to completed
+        setTimeout(async () => {
+          const finalCheck = await prisma.job.findUnique({ where: { shortId } });
+          if (finalCheck && finalCheck.status === 'Printing') { 
+            const completedJob = await prisma.job.update({
+              where: { shortId },
+              data: { status: 'Completed' }
+            });
+            if (io) io.emit('job_status_changed', completedJob);
+            console.log(`Job ${shortId} is now Completed!`);
+          }
+        }, printTimeMs);
+      }
+    }, 2000);
+  } catch (error) {
+    console.error('Error in startPrintingProcess:', error);
+  }
 };
 
-const calculateEstimatedWaitTime = (jobId) => {
-  // Find position in queue
-  const queue = jobs.filter(j => j.status === 'Waiting' || j.status === 'Printing');
-  let waitTimeSeconds = 0;
+const calculateEstimatedWaitTime = async (shortId) => {
+  try {
+    const queue = await prisma.job.findMany({
+      where: {
+        status: { in: ['Waiting', 'Printing'] }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
 
-  for (const j of queue) {
-    if (j.id === jobId) break; // Only count jobs ahead of this one
-    const pagesToPrint = j.settings?.pagesToPrint || j.file?.pages || 1;
-    const copies = j.settings?.copies || 1;
-    waitTimeSeconds += (pagesToPrint * copies * 2); // 2 seconds per page
-  }
-  
-  // Add 2 seconds padding per job for mechanical delay
-  const jobsAhead = queue.findIndex(j => j.id === jobId);
-  if (jobsAhead > 0) {
-    waitTimeSeconds += (jobsAhead * 2); 
-  }
+    let waitTimeSeconds = 0;
+    let jobsAhead = 0;
 
-  // If waitTime is less than 3 seconds (maybe currently printing and almost done)
-  return Math.max(waitTimeSeconds, 3);
+    for (const j of queue) {
+      if (j.shortId === shortId) break; 
+      const pagesToPrint = j.pagesToPrint || j.pages || 1;
+      const copies = j.copies || 1;
+      waitTimeSeconds += (pagesToPrint * copies * 2);
+      jobsAhead++;
+    }
+    
+    if (jobsAhead > 0) {
+      waitTimeSeconds += (jobsAhead * 2); 
+    }
+
+    return Math.max(waitTimeSeconds, 3);
+  } catch (error) {
+    console.error('Error calculating ETA:', error);
+    return 3;
+  }
 };
 
 // Cleanup abandoned jobs every 15 minutes (remove Pending Payment jobs older than 1 hour)
-setInterval(() => {
-  const oneHourAgo = Date.now() - 3600000;
-  const initialLength = jobs.length;
-  
-  // Modifying the original array in place to maintain reference
-  for (let i = jobs.length - 1; i >= 0; i--) {
-    const job = jobs[i];
-    if (job.status === 'Pending_Payment' && new Date(job.createdAt).getTime() < oneHourAgo) {
-      jobs.splice(i, 1);
-    }
-  }
+setInterval(async () => {
+  try {
+    const oneHourAgo = new Date(Date.now() - 3600000);
+    const result = await prisma.job.deleteMany({
+      where: {
+        status: 'Pending_Payment',
+        createdAt: {
+          lt: oneHourAgo
+        }
+      }
+    });
 
-  if (jobs.length !== initialLength) {
-    console.log(`🧹 Cleaned up ${initialLength - jobs.length} abandoned jobs from memory.`);
-    saveJobs();
+    if (result.count > 0) {
+      console.log(`🧹 Cleaned up ${result.count} abandoned jobs from database.`);
+    }
+  } catch (error) {
+    console.error('Error during cleanup:', error);
   }
 }, 15 * 60 * 1000);
 

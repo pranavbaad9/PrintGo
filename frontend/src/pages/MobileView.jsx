@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import axios from 'axios';
-import { Upload, Settings, CheckCircle, Smartphone, Loader, CreditCard } from 'lucide-react';
+import { Upload, Settings, CheckCircle, Smartphone, Loader, CreditCard, WifiOff } from 'lucide-react';
 
-const API_URL = 'https://printgo-ssoi.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'https://printgo-ssoi.onrender.com';
 
 const MobileView = () => {
   const { sessionId } = useParams();
   const [socket, setSocket] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
   const [step, setStep] = useState(1);
   const [fileData, setFileData] = useState(null);
   const [jobId, setJobId] = useState(null);
@@ -28,8 +29,13 @@ const MobileView = () => {
   useEffect(() => {
     const newSocket = io(API_URL);
     setSocket(newSocket);
-    newSocket.emit('join_session', sessionId);
-    newSocket.emit('mobile_connected', sessionId);
+    
+    newSocket.on('connect', () => {
+      setIsConnected(true);
+      newSocket.emit('join_session', sessionId);
+      newSocket.emit('mobile_connected', sessionId);
+    });
+    newSocket.on('disconnect', () => setIsConnected(false));
 
     newSocket.on('kiosk_payment_success', ({ jobId: j }) => { setJobId(j); setStep(3); });
     newSocket.on('job_status_changed', (job) => {
@@ -119,8 +125,8 @@ const MobileView = () => {
     try {
       const res = await axios.post(`${API_URL}/api/jobs`, { file: fileData, settings, price });
       if (res.data.success) {
-        setJobId(res.data.job.id);
-        socket.emit('payment_initiated', { sessionId, price, jobId: res.data.job.id });
+        setJobId(res.data.job.shortId);
+        socket.emit('payment_initiated', { sessionId, price, jobId: res.data.job.shortId });
         setStep(3);
       }
     } catch (err) { console.error(err); }
@@ -204,7 +210,13 @@ const MobileView = () => {
 
   if (step === 1) {
     return (
-      <div style={{ padding: '1rem', maxWidth: 480, margin: '0 auto', width: '100%' }}>
+      <div style={{ padding: '1rem', maxWidth: 480, margin: '0 auto', width: '100%', position: 'relative' }}>
+        {!isConnected && (
+          <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', background: 'var(--error-500)', color: 'white', padding: '0.5rem 1rem', borderRadius: 'var(--radius-full)', display: 'flex', alignItems: 'center', gap: '0.5rem', zIndex: 50, width: 'max-content', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)' }}>
+            <WifiOff size={16} />
+            <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Offline Mode</span>
+          </div>
+        )}
         <StepIndicator />
         <div className="glass-panel text-center animate-fade-in" style={{ marginTop: '1rem' }}>
           <div style={{ display: 'inline-flex', background: 'var(--primary-50)', borderRadius: '50%', padding: '1rem', marginBottom: '1rem' }}>
@@ -232,7 +244,13 @@ const MobileView = () => {
 
   if (step === 2) {
     return (
-      <div style={{ padding: '1rem', maxWidth: 480, margin: '0 auto', width: '100%' }}>
+      <div style={{ padding: '1rem', maxWidth: 480, margin: '0 auto', width: '100%', position: 'relative' }}>
+        {!isConnected && (
+          <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', background: 'var(--error-500)', color: 'white', padding: '0.5rem 1rem', borderRadius: 'var(--radius-full)', display: 'flex', alignItems: 'center', gap: '0.5rem', zIndex: 50, width: 'max-content', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)' }}>
+            <WifiOff size={16} />
+            <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Offline Mode</span>
+          </div>
+        )}
         <StepIndicator />
         <div className="glass-panel animate-fade-in" style={{ marginTop: '1rem' }}>
           <div className="flex align-center gap-3 mb-4">
@@ -293,7 +311,13 @@ const MobileView = () => {
 
   if (step === 3) {
     return (
-      <div style={{ padding: '1rem', maxWidth: 480, margin: '0 auto', width: '100%' }}>
+      <div style={{ padding: '1rem', maxWidth: 480, margin: '0 auto', width: '100%', position: 'relative' }}>
+        {!isConnected && (
+          <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', background: 'var(--error-500)', color: 'white', padding: '0.5rem 1rem', borderRadius: 'var(--radius-full)', display: 'flex', alignItems: 'center', gap: '0.5rem', zIndex: 50, width: 'max-content', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)' }}>
+            <WifiOff size={16} />
+            <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Offline Mode</span>
+          </div>
+        )}
         <StepIndicator />
         <div className="glass-panel text-center animate-fade-in" style={{ marginTop: '1rem', paddingTop: '2rem', paddingBottom: '2rem' }}>
           <div style={{ display: 'inline-flex', background: 'var(--primary-50)', borderRadius: '50%', padding: '1rem', marginBottom: '1.25rem' }}>
@@ -316,7 +340,13 @@ const MobileView = () => {
 
   if (step === 4) {
     return (
-      <div style={{ padding: '1rem', maxWidth: 480, margin: '0 auto', width: '100%' }}>
+      <div style={{ padding: '1rem', maxWidth: 480, margin: '0 auto', width: '100%', position: 'relative' }}>
+        {!isConnected && (
+          <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', background: 'var(--error-500)', color: 'white', padding: '0.5rem 1rem', borderRadius: 'var(--radius-full)', display: 'flex', alignItems: 'center', gap: '0.5rem', zIndex: 50, width: 'max-content', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)' }}>
+            <WifiOff size={16} />
+            <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Offline Mode</span>
+          </div>
+        )}
         <StepIndicator />
         <div className="glass-panel text-center animate-fade-in" style={{ marginTop: '1rem', paddingTop: '2rem', paddingBottom: '2rem' }}>
           <div className="success-circle">
