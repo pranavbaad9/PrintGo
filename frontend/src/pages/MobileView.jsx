@@ -260,7 +260,7 @@ const MobileView = () => {
             {uploading ? (
               <><Loader size={18} className="animate-spin" /> Uploading...</>
             ) : (
-              <>Choose File (Max 25MB)</>
+              <>Choose File (Max 1GB)</>
             )}
             <input type="file" style={{ display: 'none' }} onChange={handleFileUpload} accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png" disabled={uploading} />
           </label>
