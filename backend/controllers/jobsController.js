@@ -77,7 +77,11 @@ const createCashfreeOrder = async (req, res, next) => {
       throw new Error('Job is not pending payment');
     }
 
-    const response = await axios.post('https://sandbox.cashfree.com/pg/orders', {
+    const cashfreeUrl = process.env.CASHFREE_SECRET_KEY && process.env.CASHFREE_SECRET_KEY.includes('prod') 
+      ? 'https://api.cashfree.com/pg/orders' 
+      : 'https://sandbox.cashfree.com/pg/orders';
+
+    const response = await axios.post(cashfreeUrl, {
       customer_details: {
         customer_id: `cust_${job.shortId}`,
         customer_phone: '9876543210',
@@ -108,7 +112,8 @@ const createCashfreeOrder = async (req, res, next) => {
     res.json({ 
       success: true, 
       paymentSessionId: response.data.payment_session_id,
-      orderId: response.data.order_id
+      orderId: response.data.order_id,
+      environment: cashfreeUrl.includes('sandbox') ? 'sandbox' : 'production'
     });
   } catch (error) {
     console.error("Cashfree order error:", error?.response?.data || error.message);
@@ -123,10 +128,9 @@ const cashfreeWebhook = async (req, res, next) => {
     const timestamp = req.headers['x-webhook-timestamp'];
     
     // Validate signature
-    const rawBody = JSON.stringify(req.body);
     const expectedSignature = crypto
       .createHmac('sha256', process.env.CASHFREE_SECRET_KEY)
-      .update(timestamp + rawBody)
+      .update(timestamp + req.rawBody)
       .digest('base64');
       
     if (signature !== expectedSignature) {

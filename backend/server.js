@@ -36,7 +36,11 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/', apiLimiter);
 
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString();
+  }
+}));
 app.use(cookieParser());
 
 // Ensure uploads directory exists

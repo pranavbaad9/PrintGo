@@ -149,8 +149,8 @@ const MobileView = () => {
       const orderRes = await axios.post(`${API_URL}/api/jobs/${jobId}/cashfree/order`);
       if (!orderRes.data.success) return;
 
-      const { paymentSessionId, orderId } = orderRes.data;
-      const cashfree = window.Cashfree({ mode: 'production' });
+      const { paymentSessionId, orderId, environment } = orderRes.data;
+      const cashfree = window.Cashfree({ mode: environment || 'sandbox' });
 
       cashfree.checkout({ paymentSessionId, redirectTarget: '_modal' }).then(async (result) => {
         if (result.error) {
@@ -158,9 +158,8 @@ const MobileView = () => {
           alert('Payment failed or cancelled.');
         }
         if (result.paymentDetails) {
-          try {
-            await axios.post(`${API_URL}/api/jobs/${jobId}/cashfree/verify`, { order_id: orderId });
-          } catch { alert('Payment verification failed.'); }
+          // Backend Webhook will handle the verification and emit 'job_status_changed'
+          console.log('Payment successful. Waiting for webhook verification...');
         }
       });
     } catch (err) {
