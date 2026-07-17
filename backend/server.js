@@ -37,10 +37,12 @@ const apiLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 
 app.use(express.json({
+  limit: '1000mb',
   verify: (req, res, buf) => {
     req.rawBody = buf.toString();
   }
 }));
+app.use(express.urlencoded({ limit: '1000mb', extended: true }));
 app.use(cookieParser());
 
 // Ensure uploads directory exists

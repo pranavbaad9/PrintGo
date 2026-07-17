@@ -128,7 +128,8 @@ const MobileView = () => {
       }
     } catch (err) {
       console.error(err);
-      alert('Upload failed. Please try again.');
+      const errorMsg = err.response?.data?.error || err.message || 'Unknown error';
+      alert(`Upload failed: ${errorMsg}`);
     } finally {
       setUploading(false);
     }
