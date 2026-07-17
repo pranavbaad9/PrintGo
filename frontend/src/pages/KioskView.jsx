@@ -49,19 +49,37 @@ const KioskView = () => {
     return () => newSocket.close();
   }, []);
 
-  // Auto-reset timers
+  const [timeLeft, setTimeLeft] = useState(null);
+
+  // Dynamic Inactivity timer logic
   useEffect(() => {
-    let timeout;
-    if (step > 1 && step < 5) {
-      timeout = setTimeout(() => {
-        window.location.reload(); // 3 minutes inactivity timeout
-      }, 3 * 60 * 1000);
+    let interval;
+    if (step === 2) {
+      setTimeLeft(60); // 1 minute to upload a file
+    } else if (step === 3) {
+      setTimeLeft(120); // 2 minutes to select settings and hit pay
+    } else if (step === 4) {
+      setTimeLeft(180); // 3 minutes to complete payment
     } else if (step === 5 && (jobStatus === 'Completed' || jobStatus === 'Cancelled')) {
-      timeout = setTimeout(() => {
-        window.location.reload(); // Auto-reset 15 seconds after completion
-      }, 15 * 1000);
+      setTimeLeft(15); // 15 seconds to view success screen
+    } else {
+      setTimeLeft(null);
     }
-    return () => clearTimeout(timeout);
+
+    if (step > 1) {
+      interval = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev === null) return null;
+          if (prev <= 1) {
+            window.location.reload(); // Time's up, reset kiosk!
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+
+    return () => clearInterval(interval);
   }, [step, jobStatus, fileData, settingsData, price, jobId]);
 
   useEffect(() => {
@@ -286,7 +304,29 @@ const KioskView = () => {
           />
         ))}
       </div>
+      
       {renderContent()}
+
+      {/* Auto-reset Timer Badge */}
+      {timeLeft !== null && step > 1 && (
+        <div style={{
+          position: 'absolute',
+          bottom: 20,
+          right: 20,
+          background: 'rgba(0,0,0,0.05)',
+          padding: '8px 16px',
+          borderRadius: 'var(--radius-full)',
+          fontSize: '0.875rem',
+          color: 'var(--text-muted)',
+          fontWeight: 600,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: timeLeft < 15 ? 'var(--error-500)' : 'var(--warning-500)' }} />
+          Session resets in {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
+        </div>
+      )}
     </div>
   );
 };
