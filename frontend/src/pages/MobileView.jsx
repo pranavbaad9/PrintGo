@@ -27,7 +27,7 @@ const MobileView = () => {
   const [price, setPrice] = useState(0);
 
   useEffect(() => {
-    const newSocket = io(API_URL);
+    const newSocket = io(API_URL, { transports: ['websocket'] });
     setSocket(newSocket);
     
     newSocket.on('connect', () => {

@@ -22,7 +22,7 @@ const KioskView = () => {
   useEffect(() => {
     const id = uuidv4().substring(0, 8);
     setSessionId(id);
-    const newSocket = io(API_URL);
+    const newSocket = io(API_URL, { transports: ['websocket'] });
     setSocket(newSocket);
     
     newSocket.on('connect', () => {

@@ -64,7 +64,7 @@ const AdminDashboard = () => {
     
     fetchJobs();
 
-    const socket = io(API_URL);
+    const socket = io(API_URL, { transports: ['websocket'] });
     socket.on('job_status_changed', (updatedJob) => {
       setJobs(prev => {
         const exists = prev.find(j => j.id === updatedJob.id);
