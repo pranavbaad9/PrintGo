@@ -54,7 +54,11 @@ const AppLayout = ({ children }) => {
   return (
     <div className="container" style={isMobile ? { padding: 0, maxWidth: '100%' } : {}}>
       <header className="app-header" style={isMobile ? { padding: '0.75rem 1rem' } : {}}>
-        <Link to="/kiosk" className="logo" style={{ textDecoration: 'none' }}>
+        <Link 
+          to={isMobile ? "#" : "/kiosk"} 
+          className="logo" 
+          style={{ textDecoration: 'none', pointerEvents: isMobile ? 'none' : 'auto' }}
+        >
           <div style={{
             background: 'var(--primary-gradient)',
             borderRadius: 'var(--radius-md)',
