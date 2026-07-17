@@ -55,7 +55,7 @@ const KioskView = () => {
   useEffect(() => {
     let interval;
     if (step === 2) {
-      setTimeLeft(60); // 1 minute to upload a file
+      setTimeLeft(40); // 40 seconds to upload a file
     } else if (step === 3) {
       setTimeLeft(120); // 2 minutes to select settings and hit pay
     } else if (step === 4) {
