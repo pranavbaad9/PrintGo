@@ -4,7 +4,8 @@ const {
   getJob, 
   createJob, 
   createCashfreeOrder, 
-  cashfreeWebhook, 
+  cashfreeWebhook,
+  verifyPayment, 
   updateJobStatus 
 } = require('../controllers/jobsController');
 const { authMiddleware, adminMiddleware } = require('../middlewares/auth');
@@ -16,6 +17,8 @@ router.get('/', authMiddleware, adminMiddleware, getAllJobs);
 router.get('/:id', getJob);
 router.post('/', validate(createJobSchema), createJob);
 router.post('/:id/cashfree/order', createCashfreeOrder);
+router.post('/cashfree/webhook', cashfreeWebhook);
+router.get('/:id/verify', verifyPayment);
 router.put('/:id/status', authMiddleware, adminMiddleware, updateJobStatus);
 
 module.exports = router;

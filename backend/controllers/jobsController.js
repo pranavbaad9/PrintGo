@@ -158,6 +158,51 @@ const cashfreeWebhook = async (req, res, next) => {
   }
 };
 
+const verifyPayment = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const job = await prisma.job.findUnique({ where: { shortId: id } });
+
+    if (!job) {
+      throw new AppError('Job not found', 404);
+    }
+    
+    // If already paid and processing, just return success
+    if (job.status !== 'Pending_Payment') {
+      return res.json({ success: true, job });
+    }
+
+    const cashfreeUrl = process.env.CASHFREE_SECRET_KEY && process.env.CASHFREE_SECRET_KEY.includes('prod') 
+      ? `https://api.cashfree.com/pg/orders/${job.cashfreeOrderId}`
+      : `https://sandbox.cashfree.com/pg/orders/${job.cashfreeOrderId}`;
+
+    const response = await axios.get(cashfreeUrl, {
+      headers: {
+        'x-client-id': process.env.CASHFREE_APP_ID,
+        'x-client-secret': process.env.CASHFREE_SECRET_KEY,
+        'x-api-version': '2023-08-01'
+      }
+    });
+
+    if (response.data.order_status === 'PAID') {
+      const updatedJob = await prisma.job.update({
+        where: { shortId: job.shortId },
+        data: { status: 'Waiting', paymentStatus: 'PAID' }
+      });
+      
+      req.app.get('io').emit('job_status_changed', updatedJob);
+      startPrintingProcess(updatedJob.shortId, req.app.get('io'));
+      
+      return res.json({ success: true, job: updatedJob });
+    }
+
+    res.json({ success: false, status: response.data.order_status });
+  } catch (error) {
+    console.error("Payment verify error:", error?.response?.data || error.message);
+    next(new AppError('Failed to verify payment', 500));
+  }
+};
+
 const confirmPayment = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -207,6 +252,7 @@ module.exports = {
   createJob,
   createCashfreeOrder,
   cashfreeWebhook,
+  verifyPayment,
   confirmPayment,
   updateJobStatus
 };

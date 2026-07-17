@@ -158,8 +158,18 @@ const MobileView = () => {
           alert('Payment failed or cancelled.');
         }
         if (result.paymentDetails) {
-          // Backend Webhook will handle the verification and emit 'job_status_changed'
-          console.log('Payment successful. Waiting for webhook verification...');
+          console.log('Payment successful. Verifying...');
+          try {
+            const verifyRes = await axios.get(`${API_URL}/api/jobs/${jobId}/verify`);
+            if (verifyRes.data.success && verifyRes.data.job.status !== 'Pending_Payment') {
+              setStep(4);
+            } else {
+              // Wait for webhook if manual verify says still pending
+              console.log('Verification still pending, waiting for webhook...');
+            }
+          } catch (err) {
+            console.error('Verify error:', err);
+          }
         }
       });
     } catch (err) {
