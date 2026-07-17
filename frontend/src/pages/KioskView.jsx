@@ -49,16 +49,20 @@ const KioskView = () => {
     return () => newSocket.close();
   }, []);
 
-  // Inactivity timeout
+  // Auto-reset timers
   useEffect(() => {
     let timeout;
     if (step > 1 && step < 5) {
       timeout = setTimeout(() => {
-        window.location.reload(); // Auto-reset for next customer
-      }, 3 * 60 * 1000); // 3 minutes inactivity
+        window.location.reload(); // 3 minutes inactivity timeout
+      }, 3 * 60 * 1000);
+    } else if (step === 5 && (jobStatus === 'Completed' || jobStatus === 'Cancelled')) {
+      timeout = setTimeout(() => {
+        window.location.reload(); // Auto-reset 15 seconds after completion
+      }, 15 * 1000);
     }
     return () => clearTimeout(timeout);
-  }, [step, fileData, settingsData, price, jobId]);
+  }, [step, jobStatus, fileData, settingsData, price, jobId]);
 
   useEffect(() => {
     if (step === 5 && jobId) {
