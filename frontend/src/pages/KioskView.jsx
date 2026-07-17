@@ -31,7 +31,7 @@ const KioskView = () => {
     });
     newSocket.on('disconnect', () => setIsConnected(false));
 
-    newSocket.on('kiosk_user_connected', () => setStep(2));
+    newSocket.on('kiosk_user_connected', () => setStep(prev => prev < 2 ? 2 : prev));
     newSocket.on('kiosk_file_uploaded', (data) => { setFileData(data); setStep(3); });
     newSocket.on('kiosk_settings_updated', ({ settingsData: s, price: p }) => { setSettingsData(s); setPrice(p); });
     newSocket.on('kiosk_payment_initiated', ({ price: p, jobId: j }) => { setPrice(p); setJobId(j); setStep(4); });

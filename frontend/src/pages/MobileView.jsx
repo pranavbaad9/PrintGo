@@ -45,6 +45,24 @@ const MobileView = () => {
     return () => newSocket.close();
   }, [sessionId]);
 
+  // Polling for payment verification
+  useEffect(() => {
+    let interval;
+    if (step === 3 && jobId) {
+      interval = setInterval(async () => {
+        try {
+          const verifyRes = await axios.get(`${API_URL}/api/jobs/${jobId}/verify`);
+          if (verifyRes.data.success && verifyRes.data.job.status !== 'Pending_Payment') {
+            setStep(4);
+          }
+        } catch (err) {
+          console.error('Polling verify error:', err);
+        }
+      }, 3000);
+    }
+    return () => clearInterval(interval);
+  }, [step, jobId]);
+
   useEffect(() => {
     if (!fileData) return;
 
