@@ -1,6 +1,7 @@
 const prisma = require('../utils/prisma');
 const crypto = require('crypto');
 const axios = require('axios');
+const AppError = require('../utils/AppError');
 const { startPrintingProcess, calculateEstimatedWaitTime } = require('../services/queueService');
 
 const generateShortId = () => crypto.randomBytes(4).toString('hex');
@@ -24,8 +25,7 @@ const getJob = async (req, res, next) => {
     });
     
     if (!job) {
-      res.status(404);
-      throw new Error('Job not found');
+      throw new AppError('Job not found', 404);
     }
 
     const eta = await calculateEstimatedWaitTime(job.shortId);
@@ -69,12 +69,10 @@ const createCashfreeOrder = async (req, res, next) => {
     const job = await prisma.job.findUnique({ where: { shortId: id } });
 
     if (!job) {
-      res.status(404);
-      throw new Error('Job not found');
+      throw new AppError('Job not found', 404);
     }
     if (job.status !== 'Pending_Payment') {
-      res.status(400);
-      throw new Error('Job is not pending payment');
+      throw new AppError('Job is not pending payment', 400);
     }
 
     const cashfreeUrl = process.env.CASHFREE_SECRET_KEY && process.env.CASHFREE_SECRET_KEY.includes('prod') 
@@ -134,8 +132,7 @@ const cashfreeWebhook = async (req, res, next) => {
       .digest('base64');
       
     if (signature !== expectedSignature) {
-      res.status(401);
-      throw new Error('Invalid signature');
+      throw new AppError('Invalid signature', 401);
     }
 
     const event = req.body;
@@ -156,6 +153,32 @@ const cashfreeWebhook = async (req, res, next) => {
     }
     
     res.status(200).send('OK');
+  } catch (error) {
+    next(error);
+  }
+};
+
+const confirmPayment = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const job = await prisma.job.findUnique({ where: { shortId: id } });
+
+    if (!job) {
+      throw new AppError('Job not found', 404);
+    }
+    if (job.status !== 'Pending_Payment') {
+      throw new AppError('Job is not pending payment', 400);
+    }
+
+    const updatedJob = await prisma.job.update({
+      where: { shortId: id },
+      data: { status: 'Waiting', paymentStatus: 'PAID' }
+    });
+
+    req.app.get('io').emit('job_status_changed', updatedJob);
+    startPrintingProcess(updatedJob.shortId, req.app.get('io'));
+
+    res.json({ success: true, job: updatedJob });
   } catch (error) {
     next(error);
   }
@@ -184,5 +207,6 @@ module.exports = {
   createJob,
   createCashfreeOrder,
   cashfreeWebhook,
+  confirmPayment,
   updateJobStatus
 };

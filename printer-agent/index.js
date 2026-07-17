@@ -59,7 +59,7 @@ const checkPrinterStatus = () => {
     if (stdout.includes('4') && stdout.includes('Paper Out')) {
       isError = true;
       errorMessage = 'Out of Paper';
-    } else if (stdout.includes('Offline')) {
+    } else if (stdout.includes('True') && stdout.includes('Offline')) { // 'WorkOffline' header exists, we want to check if the value is 'True'
       isError = true;
       errorMessage = 'Printer Offline';
     } else if (stdout.includes('5')) {
