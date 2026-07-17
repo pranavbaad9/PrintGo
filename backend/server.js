@@ -103,6 +103,25 @@ io.on('connection', (socket) => {
     io.to(sessionId).emit('kiosk_payment_success', { jobId });
   });
 
+  // Printer Agent Events
+  socket.on('register_printer', (data) => {
+    console.log('Physical printer registered:', data.printerName);
+  });
+
+  socket.on('printer_status_update', (status) => {
+    io.emit('printer_status_update', status);
+  });
+
+  socket.on('print_spooler_success', ({ jobId }) => {
+    console.log(`Print spooler accepted job ${jobId}`);
+  });
+
+  socket.on('print_spooler_error', ({ jobId, error }) => {
+    console.error(`Print spooler failed for job ${jobId}: ${error}`);
+    // Optionally emit to frontend to notify admins
+    io.emit('job_status_changed', { id: 'error', shortId: jobId, status: 'Failed', error });
+  });
+
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
   });

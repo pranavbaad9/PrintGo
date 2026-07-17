@@ -25,7 +25,7 @@ if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir);
 }
 
-const socket = io(BACKEND_URL);
+const socket = io(BACKEND_URL, { transports: ['websocket'] });
 
 socket.on('connect', () => {
   console.log(`✅ Connected to cloud backend! (Socket ID: ${socket.id})`);
