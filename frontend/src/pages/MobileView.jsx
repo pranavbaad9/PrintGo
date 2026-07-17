@@ -107,7 +107,10 @@ const MobileView = () => {
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 25 * 1024 * 1024) { alert('File too large! Max 25MB.'); return; }
+    if (file.size > 1000 * 1024 * 1024) {
+      alert('File size exceeds 1000MB limit.');
+      return;
+    }
 
     setUploading(true);
     const formData = new FormData();
