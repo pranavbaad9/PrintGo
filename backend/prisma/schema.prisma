@@ -21,6 +21,7 @@ model Job {
   shortId         String   @unique // The 8-character ID used in Kiosk
   status          String   @default("Pending_Payment") // Pending_Payment, Waiting, Printing, Completed, Cancelled
   price           Float
+  printerId       String   @default("DEFAULT") // Used for multi-printer routing
   
   // File details
   originalName    String
