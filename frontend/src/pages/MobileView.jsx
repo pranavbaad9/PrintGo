@@ -17,7 +17,15 @@ const MobileView = () => {
   const [fileData, setFileData] = useState(null);
   const [jobId, setJobId] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [isSubmittingSettings, setIsSubmittingSettings] = useState(false);
+  const [isInitializingPayment, setIsInitializingPayment] = useState(false);
+  const [error, setError] = useState('');
   const [price, setPrice] = useState(0);
+
+  const showError = (msg) => {
+    setError(msg);
+    setTimeout(() => setError(''), 5000);
+  };
 
   const [settings, setSettings] = useState({
     color: 'bw',
@@ -109,7 +117,7 @@ const MobileView = () => {
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 1000 * 1024 * 1024) {
-      alert('File size exceeds 1000MB limit.');
+      showError('File size exceeds 1000MB limit.');
       return;
     }
 
@@ -128,7 +136,11 @@ const MobileView = () => {
         setStep(2);
       }
     } catch (err) {
-      alert(`Upload failed`);
+      if (err.code === 'ECONNABORTED' || (err.message && err.message.includes('timeout'))) {
+        showError('Server is waking up, please try again in a few seconds.');
+      } else {
+        showError('Upload failed. Please try again.');
+      }
     } finally {
       setUploading(false);
     }
@@ -143,14 +155,24 @@ const MobileView = () => {
   };
 
   const handlePrintSettingsSubmit = async () => {
+    setIsSubmittingSettings(true);
     try {
-      const res = await axios.post(`${API_URL}/api/jobs`, { file: fileData, settings, cost: price });
+      const res = await axios.post(`${API_URL}/api/jobs`, { file: fileData, settings, cost: price }, { timeout: 15000 });
       if (res.data.success) {
         setJobId(res.data.job.shortId);
         socket.emit('payment_initiated', { sessionId, price, jobId: res.data.job.shortId });
         setStep(3);
       }
-    } catch (err) { console.error(err); }
+    } catch (err) { 
+      console.error(err);
+      if (err.code === 'ECONNABORTED' || (err.message && err.message.includes('timeout'))) {
+        showError('Server is waking up, please try again in a few seconds.');
+      } else {
+        showError('Failed to save settings. Please try again.');
+      }
+    } finally {
+      setIsSubmittingSettings(false);
+    }
   };
 
   const loadCashfree = () => new Promise((resolve) => {
@@ -163,19 +185,29 @@ const MobileView = () => {
   });
 
   const handleCashfreePayment = async () => {
+    setIsInitializingPayment(true);
     const res = await loadCashfree();
-    if (!res) { alert('Payment SDK failed to load.'); return; }
+    if (!res) { 
+      showError('Payment SDK failed to load.'); 
+      setIsInitializingPayment(false);
+      return; 
+    }
 
     try {
-      const orderRes = await axios.post(`${API_URL}/api/payments/order/${jobId}`);
-      if (!orderRes.data.success) return;
+      const orderRes = await axios.post(`${API_URL}/api/payments/order/${jobId}`, {}, { timeout: 15000 });
+      if (!orderRes.data.success) {
+        showError('Failed to create order.');
+        setIsInitializingPayment(false);
+        return;
+      }
 
       const { paymentSessionId, orderId, environment } = orderRes.data;
       const cashfree = window.Cashfree({ mode: environment || 'sandbox' });
 
       cashfree.checkout({ paymentSessionId, redirectTarget: '_modal' }).then(async (result) => {
+        setIsInitializingPayment(false);
         if (result.error) {
-          alert('Payment failed or cancelled.');
+          showError('Payment failed or cancelled.');
         }
         if (result.paymentDetails) {
           try {
@@ -189,7 +221,12 @@ const MobileView = () => {
         }
       });
     } catch (err) {
-      alert('Failed to initialize payment.');
+      setIsInitializingPayment(false);
+      if (err.code === 'ECONNABORTED' || (err.message && err.message.includes('timeout'))) {
+        showError('Server is waking up, please try again in a few seconds.');
+      } else {
+        showError('Failed to initialize payment.');
+      }
     }
   };
 
@@ -257,8 +294,13 @@ const MobileView = () => {
             <div className="price-card mt-2">
               <p className="text-sm opacity-80 mb-1">Total</p>
               <p className="text-4xl font-extrabold mb-3">₹{price}</p>
-              <button className="btn w-full font-bold" style={{ background: 'white', color: 'var(--primary-color)', border: 'none' }} onClick={handlePrintSettingsSubmit}>
-                Proceed to Payment
+              <button 
+                className="btn w-full font-bold" 
+                style={{ background: 'white', color: 'var(--primary-color)', border: 'none', display: 'flex', justifyContent: 'center' }} 
+                onClick={handlePrintSettingsSubmit}
+                disabled={isSubmittingSettings}
+              >
+                {isSubmittingSettings ? <><Loader size={18} className="animate-spin mr-2" /> Processing...</> : 'Proceed to Payment'}
               </button>
             </div>
           </Card>
@@ -272,8 +314,8 @@ const MobileView = () => {
             <h2 className="text-2xl font-bold mb-2">Payment Required</h2>
             <p className="text-muted mb-6">Total: <strong className="text-main text-xl">₹{price}</strong></p>
 
-            <Button className="w-full text-lg py-3" onClick={handleCashfreePayment}>
-              Pay Securely
+            <Button className="w-full text-lg py-3" onClick={handleCashfreePayment} disabled={isInitializingPayment} style={{ display: 'flex', justifyContent: 'center' }}>
+              {isInitializingPayment ? <><Loader size={20} className="animate-spin mr-2" /> Loading...</> : 'Pay Securely'}
             </Button>
           </Card>
         );
@@ -300,6 +342,11 @@ const MobileView = () => {
         <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', background: 'var(--error-500)', color: 'white', padding: '0.5rem 1rem', borderRadius: 'var(--radius-full)', display: 'flex', alignItems: 'center', gap: '0.5rem', zIndex: 50, width: 'max-content', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)' }}>
           <WifiOff size={16} />
           <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Offline Mode</span>
+        </div>
+      )}
+      {error && (
+        <div className="animate-fade-in" style={{ background: '#FEE2E2', border: '1px solid #FCA5A5', color: '#991B1B', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', marginBottom: '1rem', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ fontWeight: 600 }}>Error:</span> {error}
         </div>
       )}
       <StepIndicator step={step} />

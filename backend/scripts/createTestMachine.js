@@ -1,14 +1,14 @@
-const prisma = require('../utils/prisma');
+const prisma = require('../src/utils/prisma');
 const crypto = require('crypto');
 
 async function main() {
   try {
-    // 1. Create a Test Franchisee
-    const franchisee = await prisma.franchisee.create({
+    // 1. Create a Test Company
+    const company = await prisma.company.create({
       data: {
         name: 'Test Store Owner',
-        email: `owner_${Date.now()}@test.com`,
-        phone: '1234567890'
+        contactEmail: `owner_${Date.now()}@test.com`,
+        contactPhone: '1234567890'
       }
     });
 
@@ -19,9 +19,8 @@ async function main() {
         name: 'Kiosk Alpha',
         location: 'Mumbai Central',
         machineKey: machineKey,
-        franchiseeId: franchisee.id,
-        subscriptionPlan: 'Premium',
-        status: 'Active'
+        companyId: company.id,
+        status: 'ACTIVE'
       }
     });
 

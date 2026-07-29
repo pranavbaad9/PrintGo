@@ -14,6 +14,13 @@ services:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    container_name: printgo-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
   backend:
     build: 
       context: ./backend
@@ -30,6 +37,7 @@ services:
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
       - CASHFREE_APP_ID=${CASHFREE_APP_ID:-test_app_id}
       - CASHFREE_SECRET_KEY=${CASHFREE_SECRET_KEY:-test_secret_key}
+      - REDIS_HOST=redis
     depends_on:
       - postgres
     volumes:

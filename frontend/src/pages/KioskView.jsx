@@ -124,9 +124,9 @@ const KioskView = () => {
   return (
     <div style={{ minHeight: '70vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', position: 'relative' }}>
       {!isConnected && (
-        <div style={{ position: 'absolute', top: -20, left: '50%', transform: 'translateX(-50%)', background: 'var(--error-500)', color: 'white', padding: '0.5rem 1rem', borderRadius: 'var(--radius-full)', display: 'flex', alignItems: 'center', gap: '0.5rem', zIndex: 50, boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)' }}>
-          <WifiOff size={16} />
-          <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Offline Mode. Trying to reconnect...</span>
+        <div className="animate-fade-in" style={{ position: 'fixed', top: '1.5rem', left: '50%', transform: 'translateX(-50%)', background: 'var(--error-500)', color: 'white', padding: '0.75rem 1.5rem', borderRadius: 'var(--radius-full)', display: 'flex', alignItems: 'center', gap: '0.75rem', zIndex: 9999, boxShadow: '0 10px 25px rgba(239, 68, 68, 0.4)' }}>
+          <WifiOff size={18} />
+          <span style={{ fontSize: '1rem', fontWeight: 600 }}>Offline Mode. Reconnecting...</span>
         </div>
       )}
       
