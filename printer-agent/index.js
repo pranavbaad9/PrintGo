@@ -4,6 +4,7 @@ const axios = require('axios');
 const ptp = require('pdf-to-printer');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { exec } = require('child_process');
 
 process.on('uncaughtException', (err) => {
@@ -16,6 +17,12 @@ process.on('unhandledRejection', (reason, promise) => {
 
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:5000';
 const PRINTER_NAME = process.env.PRINTER_NAME || null; 
+const MACHINE_KEY = process.env.MACHINE_KEY;
+
+if (!MACHINE_KEY) {
+  console.error('🔥 FATAL ERROR: MACHINE_KEY is not defined in .env');
+  process.exit(1);
+}
 
 console.log(`🖨️  PrintGo Enterprise Printer Agent Starting...`);
 console.log(`🔗 Connecting to cloud backend: ${BACKEND_URL}`);
@@ -31,12 +38,30 @@ socket.on('connect', () => {
   console.log(`✅ Connected to cloud backend! (Socket ID: ${socket.id})`);
   
   // Register as printer agent
-  socket.emit('register_printer', { printerName: PRINTER_NAME || 'Windows Default' });
+  socket.emit('register_printer', { 
+    printerName: PRINTER_NAME || 'Windows Default',
+    machineKey: MACHINE_KEY
+  });
   
   // Periodically send printer status
   setInterval(() => {
     checkPrinterStatus();
   }, 30000); // every 30s
+});
+
+socket.on('printer_registration_failed', (data) => {
+  console.error('❌ Registration Failed:', data.error);
+  process.exit(1);
+});
+
+socket.on('printer_registered_success', (data) => {
+  console.log(`✅ Registration Success. Machine: ${data.name}`);
+});
+
+socket.on('machine_suspended', (data) => {
+  console.error(`❌ MACHINE SUSPENDED: ${data.message}`);
+  console.error(`Stopping printer agent...`);
+  process.exit(1);
 });
 
 socket.on('disconnect', () => {
@@ -67,10 +92,21 @@ const checkPrinterStatus = () => {
       errorMessage = 'Paper Jam';
     }
 
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const memoryUsage = ((totalMem - freeMem) / totalMem * 100).toFixed(2);
+    const uptime = os.uptime();
+
     socket.emit('printer_status_update', {
       isError,
       errorMessage,
       printerName: PRINTER_NAME,
+      telemetry: {
+        memoryUsage: `${memoryUsage}%`,
+        uptime: `${uptime}s`,
+        platform: os.platform(),
+        arch: os.arch()
+      },
       timestamp: new Date().toISOString()
     });
   });
@@ -82,7 +118,10 @@ socket.on('physical_print_job', async (jobData) => {
   console.log(`📄 Document: ${jobData.originalName}`);
   console.log(`======================================================`);
 
-  const fileUrl = `${BACKEND_URL}${jobData.fileUrl}`;
+  const fileUrl = jobData.fileUrl.startsWith('http') 
+    ? jobData.fileUrl 
+    : `${BACKEND_URL}${jobData.fileUrl}`;
+  
   const localFilePath = path.join(tempDir, `${jobData.jobId}.pdf`);
 
   try {
@@ -106,6 +145,19 @@ socket.on('physical_print_job', async (jobData) => {
     const printOptions = {};
     if (PRINTER_NAME) {
       printOptions.printer = PRINTER_NAME;
+    }
+    
+    // Apply settings if available
+    if (jobData.settings) {
+      if (jobData.settings.copies) {
+        printOptions.copies = jobData.settings.copies;
+      }
+      if (jobData.settings.color === 'bw') {
+        printOptions.monochrome = true;
+      }
+      if (jobData.settings.pageRangeType === 'custom' && jobData.settings.customRange) {
+        printOptions.pages = jobData.settings.customRange;
+      }
     }
     
     // Attempt printing

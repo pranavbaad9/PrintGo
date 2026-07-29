@@ -1,69 +1,64 @@
 # PrintGo Enterprise
 
-PrintGo is a next-generation self-service cloud printing solution. It allows users to scan a QR code at a physical kiosk, upload their documents from their mobile device, customize print settings, pay securely via Cashfree, and have their documents instantly printed. 
+PrintGo is a modern, enterprise-grade Smart Printing Kiosk and Software Subscription platform. We manufacture and sell the PrintGo Smart Printing Kiosk, while our recurring revenue is driven by a powerful Cloud Backend offering tiered SaaS subscription plans (Starter, Pro, Enterprise).
 
-This repository contains the full source code, which has been recently upgraded to an Enterprise 100/100 standard.
+## Core Architecture
 
-## Architecture
+PrintGo is built on a scalable, modular architecture consisting of three main components:
 
-PrintGo is divided into three components:
-1. **Frontend** (`/frontend`): A responsive React application built with Vite, featuring a real-time Kiosk UI, a Mobile Upload flow, and a secure Admin Dashboard.
-2. **Backend** (`/backend`): A robust Node.js API built with Express, featuring Clean Architecture (Controllers/Services), Zod input validation, JWT Admin Authentication, Socket.io for real-time updates, and a Prisma ORM configured for PostgreSQL.
-3. **Printer Agent** (`/printer-agent`): A lightweight Node.js service designed to run on the local computer connected to the printer. It listens to WebSocket events from the cloud backend, downloads print jobs, and interfaces directly with the Windows Print Spooler (`pdf-to-printer` & `powershell` for status reporting).
+1.  **Cloud Backend (Node.js + Express + Prisma + PostgreSQL)**
+    *   **Clean Architecture:** Structured into `src/modules`, `src/middlewares`, and `src/utils` to maintain strict separation of concerns.
+    *   **Features:** RESTful API for managing Kiosks, Franchisees, Print Jobs, Payments, Subscriptions, and robust Audit Logging.
+    *   **Security:** Rate limiting, `helmet`, CORS validation, and secure JWT-based authentication. Role-based Access Control (SuperAdmin, Franchisee, Staff, Customer).
+    *   **WebSockets:** Real-time bi-directional communication between the Kiosk, the Mobile Device, and the Printer Agent.
 
-## Enterprise Upgrades
+2.  **Frontend (React + Vite + Tailwind/Custom Premium CSS)**
+    *   **Kiosk Interface:** The screen displayed on the physical kiosk allowing users to scan a QR code.
+    *   **Mobile Interface:** An optimized, highly premium web interface for the end-user to upload files, configure print settings (color, copies, sides, custom pages), and pay securely.
+    *   **Admin Dashboard:** A robust enterprise dashboard for monitoring revenue, printer telemetry, job queues, ink/paper levels, and franchise management.
 
-* **Prisma ORM & PostgreSQL Ready**: Migrated from flat JSON files to a relational schema for high scalability and concurrency.
-* **Security & Validation**: Integrated `helmet`, `express-rate-limit`, `cookie-parser`, and `zod` for strict request parsing and defense against injection attacks.
-* **JWT Admin Auth**: The `/admin` routes and dashboard are protected by secure HTTP-only cookies and bcrypt hashed credentials.
-* **Payment Webhooks**: Secure HMAC signature validation for Cashfree Payment Gateway webhooks to guarantee idempotency and avoid spoofing.
-* **Docker Support**: Added `docker-compose.yml` and multi-stage `Dockerfile`s for rapid orchestration and scalable deployments.
-* **Comprehensive Testing**: Setup `Jest` and `Supertest` for backend API and validator testing.
-* **Real-time Metrics**: Optimized Socket.io events with fallback checks to ensure the print queues and active jobs remain precisely synchronized across the Kiosk, Mobile, and Admin dashboards.
+3.  **Printer Agent (Node.js desktop agent)**
+    *   **Hardware Interface:** Runs directly on the Windows mini-PC inside the PrintGo Kiosk.
+    *   **Print Spooling:** Interfaces with the Windows Print Spooler via `pdf-to-printer` and PowerShell to execute physical prints and apply advanced settings (color/monochrome, copies, pages).
+    *   **Telemetry:** Actively monitors OS metrics (CPU, RAM, Uptime) and physical printer states (Paper Out, Paper Jam) and streams them to the Cloud Backend.
 
-## Getting Started
+## Installation & Setup
 
-### Prerequisites
-* Node.js v18+
-* Docker & Docker Compose (optional for local deployment)
-* Cashfree Sandbox Account (for payments)
-
-### Running Locally
-
-**1. Database Setup**
+### 1. Cloud Backend
 ```bash
 cd backend
 npm install
+# Configure your .env file with DATABASE_URL, CASHFREE keys, and JWT_SECRET
 npx prisma generate
 npx prisma db push
-```
-
-**2. Start Backend**
-```bash
-npm run dev
-```
-
-**3. Start Frontend**
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-**4. Start Printer Agent (on physical machine)**
-```bash
-cd printer-agent
-npm install
 npm start
 ```
 
-## Environment Variables
+### 2. Frontend
+```bash
+cd frontend
+npm install
+# Configure your .env file with VITE_API_URL
+npm run dev
+```
 
-Check the respective `.env.example` files in each directory.
+### 3. Printer Agent
+```bash
+cd printer-agent
+npm install
+# Configure your .env file with BACKEND_URL, PRINTER_NAME, and MACHINE_KEY
+npm start
+```
 
-* **Backend**: `DATABASE_URL`, `JWT_SECRET`, `ADMIN_USER`, `ADMIN_PASS`, `CASHFREE_APP_ID`, `CASHFREE_SECRET_KEY`
-* **Frontend**: `VITE_API_URL`
-* **Printer Agent**: `BACKEND_URL`, `PRINTER_NAME`
+## Business Logic Summary
 
-## License
-MIT
+*   **Payment Flow:** End-users initiate payments via the Mobile UI which triggers an order creation through the Payments module integrating with Cashfree (with future support designed for Razorpay). Webhook endpoints process the success/failure state asynchronously.
+*   **Subscription Enforcement:** Machines belong to a `Company` and are tied to a `Subscription`. If a subscription expires or is manually suspended, the backend emits a `machine_suspended` event forcing the Printer Agent to lock down and halt print jobs.
+
+## Development Guidelines
+- Always use the `AppError` and centralized `logger.js` classes in the backend.
+- Create UI components in `frontend/src/components/ui/` for reusability.
+- The `Printer Agent` is heavily tied to Windows APIs. Use `child_process` and PowerShell scripts responsibly.
+
+---
+*Built for the future of self-service printing.*

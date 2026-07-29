@@ -7,42 +7,338 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model AdminUser {
+// ==============================================
+// 1. IDENTITY & ACCESS MANAGEMENT
+// ==============================================
+
+model User {
   id        String   @id @default(uuid())
-  username  String   @unique
+  email     String   @unique
   password  String
-  role      String   @default("ADMIN") // ADMIN, SUPERADMIN
+  name      String
+  role      Role     @default(FRANCHISEE) // SUPERADMIN, FRANCHISEE, STAFF
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  
+  notifications  Notification[]
+  supportTickets SupportTicket[]
+  activityLogs   ActivityLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+
+enum Role {
+  SUPERADMIN
+  FRANCHISEE
+  STAFF
+}
+
+model Company {
+  id           String   @id @default(uuid())
+  name         String
+  contactEmail String   @unique
+  contactPhone String?
+  
+  users    User[]
+  machines Machine[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-model Job {
+model Customer {
+  id    String  @id @default(uuid())
+  email String? @unique
+  phone String?
+  name  String?
+
+  printJobs PrintJob[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==============================================
+// 2. KIOSK & MACHINE MANAGEMENT
+// ==============================================
+
+model Machine {
+  id              String         @id @default(uuid())
+  machineKey      String         @unique // Secret key for agent auth
+  serialNumber    String?        @unique
+  activationCode  String?        @unique
+  name            String         @default("Kiosk")
+  location        String?
+  status          MachineStatus  @default(INACTIVE)
+  healthStatus    String         @default("UNKNOWN") // ONLINE, OFFLINE, PAPER_OUT, ERROR
+  printerModel    String?
+  softwareVersion String?
+  lastOnline      DateTime?
+  
+  companyId       String?
+  company         Company?       @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  subscriptions   Subscription[]
+  printJobs       PrintJob[]
+  printerStatuses PrinterStatus[]
+  notifications   Notification[]
+  supportTickets  SupportTicket[]
+  activityLogs    ActivityLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([status])
+}
+
+enum MachineStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  MAINTENANCE
+}
+
+// ==============================================
+// 3. SUBSCRIPTIONS & BILLING
+// ==============================================
+
+model Plan {
+  id          String   @id @default(uuid())
+  name        String   // Starter, Professional, Enterprise
+  price       Float
+  billingType BillingType @default(MONTHLY)
+  features    Json     @default("{}") // Stored as JSON object for flexibility
+  
+  subscriptions Subscription[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum BillingType {
+  MONTHLY
+  YEARLY
+  LIFETIME
+}
+
+model Subscription {
+  id         String             @id @default(uuid())
+  machineId  String
+  machine    Machine            @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  planId     String
+  plan       Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
+  status     SubscriptionStatus @default(ACTIVE)
+  startDate  DateTime           @default(now())
+  expiryDate DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([machineId])
+  @@index([status])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  GRACE_PERIOD
+  EXPIRED
+  CANCELLED
+}
+
+// ==============================================
+// 4. PAYMENTS & TRANSACTIONS
+// ==============================================
+
+model Payment {
+  id               String        @id @default(uuid())
+  amount           Float
+  currency         String        @default("INR")
+  status           PaymentStatus @default(PENDING)
+  gatewaySessionId String?       @unique // e.g. Cashfree session id
+  gatewayOrderId   String?       @unique // e.g. Cashfree order id
+  type             PaymentType
+
+  transactions Transaction[]
+  printJobs    PrintJob[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([gatewayOrderId])
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum PaymentType {
+  SUBSCRIPTION
+  PRINT_JOB
+}
+
+model Transaction {
   id              String   @id @default(uuid())
-  shortId         String   @unique // The 8-character ID used in Kiosk
-  status          String   @default("Pending_Payment") // Pending_Payment, Waiting, Printing, Completed, Cancelled
-  price           Float
-  printerId       String   @default("DEFAULT") // Used for multi-printer routing
+  paymentId       String
+  payment         Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  gatewayResponse Json?    // Raw response from gateway for auditing
   
-  // File details
-  originalName    String
-  filename        String
-  mimetype        String
-  size            Int
-  pages           Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
 
+// ==============================================
+// 5. PRINT JOBS & DOCUMENTS
+// ==============================================
+
+model Document {
+  id           String   @id @default(uuid())
+  originalName String
+  filename     String
+  mimetype     String
+  size         Int
+  pages        Int
+
+  printJobs PrintJob[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PrintJob {
+  id            String        @id @default(uuid())
+  shortId       String        @unique // Kiosk code (8 chars)
+  status        JobStatus     @default(PENDING_PAYMENT)
+  cost          Float
+  
+  machineId     String?
+  machine       Machine?      @relation(fields: [machineId], references: [id], onDelete: SetNull)
+  customerId    String?
+  customer      Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  documentId    String
+  document      Document      @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  paymentId     String?
+  payment       Payment?      @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  
   // Settings
-  color           String   @default("bw") // bw, color
-  duplex          String   @default("single") // single, double
-  copies          Int      @default(1)
-  pagesToPrint    Int      @default(1)
-  pageRangeType   String   @default("all") // all, custom
-  customRange     String?
+  color         String        @default("bw") // bw, color
+  duplex        String        @default("single") // single, double
+  copies        Int           @default(1)
+  pagesToPrint  Int           @default(1)
+  pageRangeType String        @default("all") // all, custom
+  customRange   String?
   
-  // Payment specifics
-  cashfreeOrderId String?  @unique
-  paymentSessionId String?
-  paymentStatus   String   @default("PENDING") // PENDING, PAID, FAILED, REFUNDED
+  printHistory  PrintHistory[]
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([shortId])
+  @@index([machineId])
+}
+
+enum JobStatus {
+  PENDING_PAYMENT
+  WAITING
+  PRINTING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model PrintHistory {
+  id           String   @id @default(uuid())
+  printJobId   String
+  printJob     PrintJob @relation(fields: [printJobId], references: [id], onDelete: Cascade)
+  success      Boolean
+  errorDetails String?
+  completedAt  DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==============================================
+// 6. TELEMETRY & SUPPORT
+// ==============================================
+
+model PrinterStatus {
+  id           String   @id @default(uuid())
+  machineId    String
+  machine      Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  isOnline     Boolean  @default(true)
+  paperStatus  String   @default("OK") // OK, LOW, OUT
+  tonerStatus  String   @default("OK") // OK, LOW, EMPTY
+  jamStatus    Boolean  @default(false)
+  timestamp    DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([machineId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  type      String   // ALERT, SYSTEM, BILLING
+  message   String
+  isRead    Boolean  @default(false)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  machineId String?
+  machine   Machine? @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SupportTicket {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  status      String   @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  priority    String   @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  machineId   String?
+  machine     Machine? @relation(fields: [machineId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ==============================================
+// 7. AUDITING & LOGS
+// ==============================================
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  action    String
+  details   Json?
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  machineId String?
+  machine   Machine? @relation(fields: [machineId], references: [id], onDelete: SetNull)
+  ipAddress String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  entity      String   // User, Machine, Subscription, etc.
+  entityId    String
+  action      String   // CREATE, UPDATE, DELETE
+  changes     Json     // Before/After snapshot
+  performedBy String?  // UserId or System
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
