@@ -3,11 +3,12 @@ const { connection } = require('./redisClient');
 const prisma = require('../utils/prisma');
 
 let printQueue = null;
-let useRedis = true;
+let useRedis = false; // Forced to false to avoid BullMQ hanging on missing Redis
 
 try {
-  // Check if we can use BullMQ/Redis
-  printQueue = new Queue('printQueue', { connection });
+  if (useRedis) {
+    printQueue = new Queue('printQueue', { connection });
+  }
 } catch(e) {
   useRedis = false;
   console.warn("BullMQ initialization failed, using in-memory queue fallback.");
