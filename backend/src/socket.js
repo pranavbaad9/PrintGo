@@ -39,10 +39,18 @@ const setupSockets = (io) => {
           return socket.emit('printer_registration_failed', { error: 'Machine Key is required' });
         }
 
-        const machine = await prisma.machine.findUnique({ where: { machineKey } });
+        let machine = await prisma.machine.findUnique({ where: { machineKey } });
         
         if (!machine) {
-          return socket.emit('printer_registration_failed', { error: 'Invalid Machine Key' });
+          // Auto-register the machine if it doesn't exist
+          machine = await prisma.machine.create({
+            data: {
+              machineKey,
+              name: printerName || 'Auto-registered Kiosk',
+              status: 'ACTIVE'
+            }
+          });
+          logger.info(`Auto-registered new machine with key: ${machineKey}`);
         }
         
         if (machine.status === 'SUSPENDED') {
