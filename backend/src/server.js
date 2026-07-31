@@ -17,6 +17,7 @@ const setupSockets = require('./socket');
 
 // Initialize Express App
 const app = express();
+app.set('trust proxy', 1);
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({

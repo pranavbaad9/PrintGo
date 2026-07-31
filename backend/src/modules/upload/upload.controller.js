@@ -7,12 +7,13 @@ const handleUpload = async (req, res, next) => {
       throw new Error('No file uploaded.');
     }
 
-    const pages = await uploadService.getPageCount(req.file.location, req.file.mimetype);
+    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    const pages = await uploadService.getPageCount(fileUrl, req.file.mimetype);
 
     res.json({
       success: true,
       file: {
-        filename: req.file.location,
+        filename: fileUrl,
         originalName: req.file.originalname,
         size: req.file.size,
         mimetype: req.file.mimetype,
