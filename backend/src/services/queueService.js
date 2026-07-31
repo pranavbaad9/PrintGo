@@ -2,23 +2,32 @@ const { Queue, Worker } = require('bullmq');
 const { connection } = require('./redisClient');
 const prisma = require('../utils/prisma');
 
-const printQueue = new Queue('printQueue', { connection });
+let printQueue = null;
+let useRedis = true;
+
+try {
+  // Check if we can use BullMQ/Redis
+  printQueue = new Queue('printQueue', { connection });
+} catch(e) {
+  useRedis = false;
+  console.warn("BullMQ initialization failed, using in-memory queue fallback.");
+}
 
 let globalIo = null;
 
-const initWorker = (io) => {
-  globalIo = io;
-  
-  const worker = new Worker('printQueue', async (job) => {
-    const { shortId } = job.data;
-    
-    const dbJob = await prisma.job.findUnique({ where: { shortId } });
+const processJob = async (shortId) => {
+  try {
+    const dbJob = await prisma.printJob.findUnique({ 
+      where: { shortId },
+      include: { document: true }
+    });
     if (!dbJob) return;
 
-    if (dbJob.status === 'Waiting') {
-      const updatedJob = await prisma.job.update({
+    if (dbJob.status === 'WAITING') {
+      const updatedJob = await prisma.printJob.update({
         where: { shortId },
-        data: { status: 'Printing' }
+        data: { status: 'PRINTING' },
+        include: { document: true }
       });
       
       if (globalIo) {
@@ -26,14 +35,14 @@ const initWorker = (io) => {
         
         const printData = {
           jobId: updatedJob.shortId,
-          fileUrl: updatedJob.filename, // Note: now a full S3 URL
-          originalName: updatedJob.originalName,
+          fileUrl: updatedJob.document ? updatedJob.document.filename : '', 
+          originalName: updatedJob.document ? updatedJob.document.originalName : '',
           settings: {
             color: updatedJob.color,
             duplex: updatedJob.duplex,
             copies: updatedJob.copies
           },
-          price: updatedJob.price
+          price: updatedJob.cost
         };
         
         if (updatedJob.machineId) {
@@ -43,47 +52,73 @@ const initWorker = (io) => {
         }
       }
       
-      console.log(`Job ${shortId} is now Printing...`);
+      console.log(`Job ${shortId} is now PRINTING...`);
       
-      // Simulate print time for completion
-      const pagesToPrint = dbJob.pagesToPrint || dbJob.pages || 1;
-      const copies = dbJob.copies || 1;
+      const pagesToPrint = updatedJob.pagesToPrint || 1;
+      const copies = updatedJob.copies || 1;
       const printTimeMs = pagesToPrint * copies * 2000;
       
       await new Promise(resolve => setTimeout(resolve, printTimeMs));
       
-      const completedJob = await prisma.job.update({
+      const completedJob = await prisma.printJob.update({
         where: { shortId },
-        data: { status: 'Completed' }
+        data: { status: 'COMPLETED' },
+        include: { document: true }
       });
       
       if (globalIo) globalIo.emit('job_status_changed', completedJob);
-      console.log(`Job ${shortId} is now Completed!`);
+      console.log(`Job ${shortId} is now COMPLETED!`);
     }
-  }, { connection });
+  } catch(e) {
+    console.error(`Error processing job ${shortId}:`, e);
+  }
+};
 
-  worker.on('failed', (job, err) => {
-    console.error(`Job ${job.id} failed with error ${err.message}`);
-  });
+const initWorker = (io) => {
+  globalIo = io;
+  if (!useRedis) return null;
+  
+  try {
+    const worker = new Worker('printQueue', async (job) => {
+      const { shortId } = job.data;
+      await processJob(shortId);
+    }, { connection });
 
-  return worker;
+    worker.on('failed', (job, err) => {
+      console.error(`Job ${job.id} failed with error ${err.message}`);
+    });
+    return worker;
+  } catch(e) {
+    useRedis = false;
+    console.warn("Failed to start BullMQ worker, falling back to in-memory.");
+    return null;
+  }
 };
 
 const startPrintingProcess = async (shortId, io) => {
   if (!globalIo && io) globalIo = io;
   
-  // Add job to BullMQ
-  await printQueue.add('printJob', { shortId }, {
-    attempts: 3,
-    backoff: { type: 'exponential', delay: 1000 }
-  });
+  if (useRedis && printQueue) {
+    try {
+      await printQueue.add('printJob', { shortId }, {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 1000 }
+      });
+    } catch(e) {
+      console.warn("Failed to add to Redis queue, running synchronously.");
+      processJob(shortId);
+    }
+  } else {
+    // In-memory fallback: just process asynchronously
+    processJob(shortId);
+  }
 };
 
 const calculateEstimatedWaitTime = async (shortId) => {
   try {
-    const queueJobs = await prisma.job.findMany({
+    const queueJobs = await prisma.printJob.findMany({
       where: {
-        status: { in: ['Waiting', 'Printing'] }
+        status: { in: ['WAITING', 'PRINTING'] }
       },
       orderBy: { createdAt: 'asc' }
     });
@@ -93,7 +128,7 @@ const calculateEstimatedWaitTime = async (shortId) => {
 
     for (const j of queueJobs) {
       if (j.shortId === shortId) break; 
-      const pagesToPrint = j.pagesToPrint || j.pages || 1;
+      const pagesToPrint = j.pagesToPrint || 1;
       const copies = j.copies || 1;
       waitTimeSeconds += (pagesToPrint * copies * 2);
       jobsAhead++;
@@ -114,9 +149,9 @@ const calculateEstimatedWaitTime = async (shortId) => {
 setInterval(async () => {
   try {
     const oneHourAgo = new Date(Date.now() - 3600000);
-    const result = await prisma.job.deleteMany({
+    const result = await prisma.printJob.deleteMany({
       where: {
-        status: 'Pending_Payment',
+        status: 'PENDING_PAYMENT',
         createdAt: {
           lt: oneHourAgo
         }
