@@ -2,7 +2,7 @@ const jobsService = require('./jobs.service');
 
 const getAllJobs = async (req, res, next) => {
   try {
-    const jobs = await jobsService.getAllJobs();
+    const jobs = await jobsService.getAllJobs(req.user);
     res.json({ success: true, jobs });
   } catch (error) {
     next(error);

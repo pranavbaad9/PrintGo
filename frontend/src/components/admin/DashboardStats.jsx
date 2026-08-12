@@ -2,14 +2,25 @@ import React from 'react';
 import { DollarSign, Activity, Droplet, File } from 'lucide-react';
 import { Card } from '../ui/Card';
 
-export const DashboardStats = ({ jobs }) => {
+export const DashboardStats = ({ jobs, machines }) => {
   const totalEarnings = jobs
     .filter(j => j.status !== 'PENDING_PAYMENT' && j.status !== 'CANCELLED')
     .reduce((sum, j) => sum + (j.cost || 0), 0);
 
   const completedJobs = jobs.filter(j => j.status === 'COMPLETED').length;
-  const paperLeft = Math.max(0, 500 - jobs.reduce((sum, j) => sum + (j.pages || 0), 0));
-  const inkLevel = Math.max(0, 100 - (jobs.length * 2));
+  
+  // Use real data from first machine if available, else fallback to mock calculation
+  let paperLeft = Math.max(0, 500 - jobs.reduce((sum, j) => sum + (j.pagesToPrint * j.copies || 0), 0));
+  let inkLevel = Math.max(0, 100 - (jobs.length * 2));
+
+  if (machines && machines.length > 0) {
+    const latestStatus = machines[0]?.printerStatuses?.[0];
+    if (latestStatus) {
+       paperLeft = latestStatus.paperStatus === 'OK' ? 500 : (latestStatus.paperStatus === 'LOW' ? 50 : 0);
+       const tonerStatus = latestStatus.tonerStatus === 'OK' ? 100 : (latestStatus.tonerStatus === 'LOW' ? 10 : 0);
+       inkLevel = tonerStatus;
+    }
+  }
 
   return (
     <div className="stagger-children" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>

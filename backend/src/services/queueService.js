@@ -3,7 +3,7 @@ const { connection } = require('./redisClient');
 const prisma = require('../utils/prisma');
 
 let printQueue = null;
-let useRedis = false; // Forced to false to avoid BullMQ hanging on missing Redis
+let useRedis = !!process.env.REDIS_HOST; // Use Redis if configured
 
 try {
   if (useRedis) {
@@ -53,22 +53,9 @@ const processJob = async (shortId) => {
         }
       }
       
-      console.log(`Job ${shortId} is now PRINTING...`);
-      
-      const pagesToPrint = updatedJob.pagesToPrint || 1;
-      const copies = updatedJob.copies || 1;
-      const printTimeMs = pagesToPrint * copies * 2000;
-      
-      await new Promise(resolve => setTimeout(resolve, printTimeMs));
-      
-      const completedJob = await prisma.printJob.update({
-        where: { shortId },
-        data: { status: 'COMPLETED' },
-        include: { document: true }
-      });
-      
-      if (globalIo) globalIo.emit('job_status_changed', completedJob);
-      console.log(`Job ${shortId} is now COMPLETED!`);
+      console.log(`Job ${shortId} is now PRINTING. Waiting for agent feedback...`);
+      // The physical printer agent will now respond with 'print_spooler_success' or 'print_spooler_error'
+      // which will be handled in socket.js to mark the job as COMPLETED or FAILED.
     }
   } catch(e) {
     console.error(`Error processing job ${shortId}:`, e);

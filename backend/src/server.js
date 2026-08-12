@@ -32,7 +32,7 @@ if (process.env.SENTRY_DSN) {
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ["https://print-go-steel.vercel.app", "http://localhost:5173", "http://localhost:4173"],
+    origin: ["https://print-go-steel.vercel.app", "http://localhost:5173", "http://localhost:4173", "http://localhost:5174"],
     methods: ["GET", "POST", "PUT"],
     credentials: true
   }
@@ -43,7 +43,7 @@ setupSockets(io);
 // Security & Middlewares
 app.use(helmet());
 app.use(cors({
-  origin: ["https://print-go-steel.vercel.app", "http://localhost:5173", "http://localhost:4173"],
+  origin: ["https://print-go-steel.vercel.app", "http://localhost:5173", "http://localhost:4173", "http://localhost:5174"],
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));
@@ -63,14 +63,16 @@ app.use(express.urlencoded({ limit: '1000mb', extended: true }));
 app.use(cookieParser());
 
 // Uploads directory
+const { fileAuth } = require('./middlewares/fileAuth');
 const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
-app.use('/uploads', express.static(uploadsDir));
+app.use('/uploads', fileAuth, express.static(uploadsDir));
 
 // Routes
 const authRoutes = require('./modules/auth/auth.routes');
+const adminRoutes = require('./modules/admin/admin.routes');
 const jobsRoutes = require('./modules/jobs/jobs.routes');
 const uploadRoutes = require('./modules/upload/upload.routes');
 const machinesRoutes = require('./modules/machines/machines.routes');
@@ -79,6 +81,7 @@ const paymentsRoutes = require('./modules/payments/payments.routes');
 const subscriptionsRoutes = require('./modules/subscriptions/subscriptions.routes');
 
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/jobs', jobsRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/machines', machinesRoutes);

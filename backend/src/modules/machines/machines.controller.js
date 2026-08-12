@@ -2,7 +2,7 @@ const machinesService = require('./machines.service');
 
 const getMachines = async (req, res, next) => {
   try {
-    const machines = await machinesService.getMachines();
+    const machines = await machinesService.getMachines(req.user);
     res.json({ success: true, machines });
   } catch (error) {
     next(error);

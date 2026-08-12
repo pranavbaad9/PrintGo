@@ -5,9 +5,21 @@ const logger = require('../../utils/logger');
 
 const generateShortId = () => crypto.randomBytes(4).toString('hex');
 
-const getAllJobs = async () => {
+const getAllJobs = async (user) => {
+  const where = {};
+  if (user && user.role !== 'SUPERADMIN') {
+    where.machine = { companyId: user.companyId };
+  }
+
   return await prisma.printJob.findMany({
-    orderBy: { createdAt: 'desc' }
+    where,
+    include: {
+      document: true,
+      machine: true,
+      customer: true
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 100
   });
 };
 
@@ -23,7 +35,7 @@ const getJobByShortId = async (shortId) => {
 };
 
 const createJob = async (jobData) => {
-  const { file, settings, cost, machineId } = jobData;
+  const { file, settings, machineId } = jobData;
   
   // Create document first
   const document = await prisma.document.create({
@@ -36,6 +48,10 @@ const createJob = async (jobData) => {
     }
   });
 
+  // Server-side price calculation — client-sent cost is IGNORED
+  const { calculatePrice } = require('../../services/pricing.service');
+  const { cost, pagesToPrint } = calculatePrice(settings, { pages: file.pages });
+
   // Create job
   const newJob = await prisma.printJob.create({
     data: {
@@ -46,14 +62,14 @@ const createJob = async (jobData) => {
       color: settings.color,
       duplex: settings.duplex,
       copies: settings.copies,
-      pagesToPrint: settings.pagesToPrint,
+      pagesToPrint,
       pageRangeType: settings.pageRangeType,
       customRange: settings.customRange || null
     },
     include: { document: true }
   });
   
-  logger.info(`Job created with shortId ${newJob.shortId}`);
+  logger.info(`Job created with shortId ${newJob.shortId}, server-calculated cost: ₹${cost}`);
   return newJob;
 };
 

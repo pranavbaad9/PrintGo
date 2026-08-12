@@ -78,6 +78,10 @@ const verifyPayment = async (orderId) => {
   const payment = await prisma.payment.findUnique({ where: { gatewayOrderId: orderId } });
   if (!payment) throw new AppError('Payment not found', 404);
 
+  if (payment.status === 'SUCCESS') {
+    return await prisma.printJob.findFirst({ where: { paymentId: payment.id } });
+  }
+
   const config = getCashfreeConfig();
   
   try {

@@ -89,7 +89,12 @@ const AdminDashboard = () => {
     if (!isAuthenticated) return;
     fetchJobs();
 
-    const socket = io(API_URL, { transports: ['websocket'] });
+    const token = localStorage.getItem('adminToken');
+    const socket = io(API_URL, { 
+      transports: ['websocket'],
+      auth: { token }
+    });
+    
     socket.on('job_status_changed', (updatedJob) => {
       setJobs(prev => {
         const exists = prev.find(j => j.id === updatedJob.id);
@@ -145,7 +150,7 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      <DashboardStats jobs={jobs} />
+      <DashboardStats jobs={jobs} machines={machines} />
 
       <div className="grid-2">
         <LivePrintQueue queue={queue} onStatusChange={handleStatusChange} />

@@ -1,9 +1,68 @@
 const prisma = require('./utils/prisma');
 const logger = require('./utils/logger');
 
+const jwt = require('jsonwebtoken');
+
 const setupSockets = (io) => {
+  // WebSocket Authentication Middleware
+  io.use(async (socket, next) => {
+    try {
+      const token = socket.handshake.auth?.token;
+      const machineKey = socket.handshake.auth?.machineKey;
+
+      if (token) {
+        // Authenticate Mobile/Kiosk via Session Token or Admin User Token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        socket.userType = decoded.type === 'session' ? 'session' : 'admin';
+        if (decoded.type === 'session') {
+          socket.sessionId = decoded.sessionId;
+          socket.machineId = decoded.machineId; // Optional
+        }
+        return next();
+      } 
+      
+      if (machineKey) {
+        // Authenticate Printer Agent via machineKey
+        const machine = await prisma.machine.findUnique({ where: { machineKey } });
+        
+        if (!machine) {
+          logger.warn(`Rejected printer connection for unknown machineKey: ${machineKey}`);
+          return next(new Error('Machine not found. Please register this machine via the admin panel.'));
+        }
+        
+        if (machine.status === 'SUSPENDED') {
+          return next(new Error('Subscription Suspended'));
+        }
+
+        socket.userType = 'printer';
+        socket.machineId = machine.id;
+        socket.machineName = machine.name;
+
+        // Update machine status on connect
+        await prisma.machine.update({
+          where: { id: machine.id },
+          data: { lastOnline: new Date(), healthStatus: 'ONLINE' }
+        });
+
+        logger.info(`Physical printer authenticated: ${machine.name}`);
+        return next();
+      }
+
+      next(new Error('Authentication error: Missing token or machineKey'));
+    } catch (err) {
+      logger.error('Socket authentication failed:', err);
+      next(new Error('Authentication error'));
+    }
+  });
+
   io.on('connection', (socket) => {
-    logger.info(`A user connected: ${socket.id}`);
+    logger.info(`A client connected: ${socket.id} (Type: ${socket.userType})`);
+
+    if (socket.userType === 'printer') {
+      socket.join(`machine_${socket.machineId}`);
+      // Notify the printer it successfully registered
+      socket.emit('printer_registered_success', { machineId: socket.machineId, name: socket.machineName });
+    }
 
     // Kiosk <-> Mobile Sync
     socket.on('join_session', (sessionId) => {
@@ -31,49 +90,6 @@ const setupSockets = (io) => {
       io.to(sessionId).emit('kiosk_payment_success', { jobId });
     });
 
-    // Printer Agent Events
-    socket.on('register_printer', async (data) => {
-      try {
-        const { printerName, machineKey } = data;
-        if (!machineKey) {
-          return socket.emit('printer_registration_failed', { error: 'Machine Key is required' });
-        }
-
-        let machine = await prisma.machine.findUnique({ where: { machineKey } });
-        
-        if (!machine) {
-          // Auto-register the machine if it doesn't exist
-          machine = await prisma.machine.create({
-            data: {
-              machineKey,
-              name: printerName || 'Auto-registered Kiosk',
-              status: 'ACTIVE'
-            }
-          });
-          logger.info(`Auto-registered new machine with key: ${machineKey}`);
-        }
-        
-        if (machine.status === 'SUSPENDED') {
-          return socket.emit('printer_registration_failed', { error: 'Subscription Suspended' });
-        }
-
-        // Join machine specific room
-        socket.join(`machine_${machine.id}`);
-        socket.machineId = machine.id;
-        
-        // Update machine status
-        await prisma.machine.update({
-          where: { id: machine.id },
-          data: { lastOnline: new Date(), healthStatus: 'ONLINE' }
-        });
-        
-        logger.info(`Physical printer registered for machine: ${machine.name}`);
-        socket.emit('printer_registered_success', { machineId: machine.id, name: machine.name });
-      } catch (error) {
-        logger.error('Error registering printer:', error);
-      }
-    });
-
     socket.on('printer_status_update', async (status) => {
       if (socket.machineId) {
         try {
@@ -86,17 +102,7 @@ const setupSockets = (io) => {
             }
           });
           
-          if (status.telemetry) {
-            await prisma.telemetry.create({
-              data: {
-                machineId: socket.machineId,
-                cpuUsage: 0, // OS module on windows doesn't give accurate CPU load easily
-                memoryUsage: parseFloat(status.telemetry.memoryUsage) || 0,
-                temperature: 0,
-                uptime: parseInt(status.telemetry.uptime) || 0
-              }
-            });
-          }
+          // Telemetry would go here if we create a Telemetry model in the future
         } catch(err) {
           logger.error('Error saving printer status', err);
         }
@@ -104,13 +110,33 @@ const setupSockets = (io) => {
       io.emit('printer_status_update', status);
     });
 
-    socket.on('print_spooler_success', ({ jobId }) => {
+    socket.on('print_spooler_success', async ({ jobId }) => {
       logger.info(`Print spooler accepted job ${jobId}`);
+      try {
+        const completedJob = await prisma.printJob.update({
+          where: { shortId: jobId },
+          data: { status: 'COMPLETED' },
+          include: { document: true }
+        });
+        io.emit('job_status_changed', completedJob);
+      } catch (err) {
+        logger.error(`Failed to update job ${jobId} to COMPLETED:`, err);
+      }
     });
 
-    socket.on('print_spooler_error', ({ jobId, error }) => {
+    socket.on('print_spooler_error', async ({ jobId, error }) => {
       logger.error(`Print spooler failed for job ${jobId}: ${error}`);
-      io.emit('job_status_changed', { id: 'error', shortId: jobId, status: 'Failed', error });
+      try {
+        const failedJob = await prisma.printJob.update({
+          where: { shortId: jobId },
+          data: { status: 'FAILED' },
+          include: { document: true }
+        });
+        io.emit('job_status_changed', failedJob);
+      } catch (err) {
+        logger.error(`Failed to update job ${jobId} to FAILED:`, err);
+        io.emit('job_status_changed', { id: 'error', shortId: jobId, status: 'FAILED', error });
+      }
     });
 
     socket.on('disconnect', () => {

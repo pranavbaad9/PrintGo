@@ -1,4 +1,7 @@
 const authService = require('./auth.service');
+const jwt = require('jsonwebtoken');
+const prisma = require('../../utils/prisma');
+const AppError = require('../../utils/AppError');
 
 const login = async (req, res, next) => {
   try {
@@ -41,8 +44,44 @@ const getMe = async (req, res, next) => {
   }
 };
 
+const createSession = async (req, res, next) => {
+  try {
+    const { sessionId, machineId } = req.body;
+
+    if (!sessionId) {
+      return next(new AppError('sessionId is required', 400));
+    }
+
+    // If machineId is provided, verify it exists and is active
+    if (machineId) {
+      const machine = await prisma.machine.findUnique({ where: { id: machineId } });
+      if (!machine) {
+        return next(new AppError('Machine not found', 404));
+      }
+      if (machine.status === 'SUSPENDED') {
+        return next(new AppError('Machine is suspended', 403));
+      }
+    }
+
+    // Issue a short-lived session token (1 hour)
+    const sessionToken = jwt.sign(
+      { sessionId, machineId: machineId || null, type: 'session' },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    res.status(200).json({
+      success: true,
+      sessionToken,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   login,
   logout,
-  getMe
+  getMe,
+  createSession
 };

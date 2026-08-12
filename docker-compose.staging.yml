@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: staging_user
+      POSTGRES_PASSWORD: staging_password
+      POSTGRES_DB: printgo_staging
+    ports:
+      - "5433:5432" # Different port to avoid conflict with dev DB
+    volumes:
+      - pgdata_staging:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379" # Different port
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=staging
+      - PORT=5000
+      - DATABASE_URL=postgresql://staging_user:staging_password@postgres:5432/printgo_staging?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=staging_jwt_secret_rotate_me
+      - ADMIN_USER=admin
+      - ADMIN_PASS=staging_admin_pass
+      - CASHFREE_APP_ID=${CASHFREE_APP_ID}
+      - CASHFREE_SECRET_KEY=${CASHFREE_SECRET_KEY}
+    ports:
+      - "5001:5000" # Expose on 5001 for staging
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://localhost:5001
+    ports:
+      - "5174:80" # Expose on 5174 for staging
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pgdata_staging:

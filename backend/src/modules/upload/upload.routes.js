@@ -36,6 +36,8 @@ const upload = multer({
   }
 });
 
-router.post('/', upload.single('file'), uploadController.handleUpload);
+const { requireSessionOrUser } = require('../../middlewares/session');
+
+router.post('/', requireSessionOrUser, upload.single('file'), uploadController.handleUpload);
 
 module.exports = router;

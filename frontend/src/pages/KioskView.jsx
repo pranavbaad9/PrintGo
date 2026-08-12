@@ -23,35 +23,57 @@ const KioskView = () => {
   const [jobStatus, setJobStatus] = useState('');
   const [eta, setEta] = useState(null);
   const [timeLeft, setTimeLeft] = useState(null);
+  const [sessionToken, setSessionToken] = useState(null);
+
+  const authHeaders = () => sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
 
   useEffect(() => {
     const id = uuidv4().substring(0, 8);
     setSessionId(id);
-    const newSocket = io(API_URL, { transports: ['websocket'] });
-    setSocket(newSocket);
-    
-    newSocket.on('connect', () => {
-      setIsConnected(true);
-      newSocket.emit('join_session', id);
-    });
-    newSocket.on('disconnect', () => setIsConnected(false));
+    let newSocket = null;
 
-    newSocket.on('kiosk_user_connected', () => setStep(prev => prev < 2 ? 2 : prev));
-    newSocket.on('kiosk_file_uploaded', (data) => { setFileData(data); setStep(3); });
-    newSocket.on('kiosk_settings_updated', ({ settingsData: s, price: p }) => { setSettingsData(s); setPrice(p); });
-    newSocket.on('kiosk_payment_initiated', ({ price: p, jobId: j }) => { setPrice(p); setJobId(j); setStep(4); });
-    newSocket.on('kiosk_payment_success', () => { setStep(5); setJobStatus('WAITING'); });
-    newSocket.on('job_status_changed', (job) => {
-      setJobId((cur) => {
-        if (job.shortId === cur) {
-          setJobStatus(job.status);
-          if (['WAITING', 'PRINTING', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(job.status)) setStep(5);
+    // Acquire session token for authenticated API calls
+    const acquireSession = async () => {
+      try {
+        const res = await axios.post(`${API_URL}/api/auth/session`, { sessionId: id });
+        if (res.data.success) {
+          const token = res.data.sessionToken;
+          setSessionToken(token);
+
+          newSocket = io(API_URL, { 
+            transports: ['websocket'],
+            auth: { token }
+          });
+          setSocket(newSocket);
+          
+          newSocket.on('connect', () => {
+            setIsConnected(true);
+            newSocket.emit('join_session', id);
+          });
+          newSocket.on('disconnect', () => setIsConnected(false));
+
+          newSocket.on('kiosk_user_connected', () => setStep(prev => prev < 2 ? 2 : prev));
+          newSocket.on('kiosk_file_uploaded', (data) => { setFileData(data); setStep(3); });
+          newSocket.on('kiosk_settings_updated', ({ settingsData: s, price: p }) => { setSettingsData(s); setPrice(p); });
+          newSocket.on('kiosk_payment_initiated', ({ price: p, jobId: j }) => { setPrice(p); setJobId(j); setStep(4); });
+          newSocket.on('kiosk_payment_success', () => { setStep(5); setJobStatus('WAITING'); });
+          newSocket.on('job_status_changed', (job) => {
+            setJobId((cur) => {
+              if (job.shortId === cur) {
+                setJobStatus(job.status);
+                if (['WAITING', 'PRINTING', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(job.status)) setStep(5);
+              }
+              return cur;
+            });
+          });
         }
-        return cur;
-      });
-    });
+      } catch (err) { console.error('Failed to acquire kiosk session token:', err); }
+    };
+    acquireSession();
 
-    return () => newSocket.close();
+    return () => {
+      if (newSocket) newSocket.close();
+    };
   }, []);
 
   // Dynamic Inactivity timer logic
@@ -89,7 +111,7 @@ const KioskView = () => {
     if (step === 5 && jobId) {
       const fetchJob = async () => {
         try {
-          const res = await axios.get(`${API_URL}/api/jobs/${jobId}`);
+          const res = await axios.get(`${API_URL}/api/jobs/${jobId}`, { headers: authHeaders() });
           if (res.data.success) {
             setJobStatus(res.data.job.status);
             setEta(res.data.job.eta || null);

@@ -21,6 +21,10 @@ const MobileView = () => {
   const [isInitializingPayment, setIsInitializingPayment] = useState(false);
   const [error, setError] = useState('');
   const [price, setPrice] = useState(0);
+  const [sessionToken, setSessionToken] = useState(null);
+
+  // Helper: returns auth headers for API requests
+  const authHeaders = () => sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
 
   const showError = (msg) => {
     setError(msg);
@@ -37,22 +41,44 @@ const MobileView = () => {
   });
 
   useEffect(() => {
-    const newSocket = io(API_URL, { transports: ['websocket'] });
-    setSocket(newSocket);
-    
-    newSocket.on('connect', () => {
-      setIsConnected(true);
-      newSocket.emit('join_session', sessionId);
-      newSocket.emit('mobile_connected', sessionId);
-    });
-    newSocket.on('disconnect', () => setIsConnected(false));
+    let newSocket = null;
 
-    newSocket.on('kiosk_payment_success', ({ jobId: j }) => { setJobId(j); setStep(4); });
-    newSocket.on('job_status_changed', (job) => {
-      if (['WAITING', 'PRINTING', 'COMPLETED'].includes(job.status) && step !== 4) setStep(4);
-    });
+    // Acquire a session token before any API calls
+    const acquireSession = async () => {
+      try {
+        const res = await axios.post(`${API_URL}/api/auth/session`, { sessionId });
+        if (res.data.success) {
+          const token = res.data.sessionToken;
+          setSessionToken(token);
 
-    return () => newSocket.close();
+          newSocket = io(API_URL, { 
+            transports: ['websocket'],
+            auth: { token }
+          });
+          setSocket(newSocket);
+          
+          newSocket.on('connect', () => {
+            setIsConnected(true);
+            newSocket.emit('join_session', sessionId);
+            newSocket.emit('mobile_connected', sessionId);
+          });
+          newSocket.on('disconnect', () => setIsConnected(false));
+
+          newSocket.on('kiosk_payment_success', ({ jobId: j }) => { setJobId(j); setStep(4); });
+          newSocket.on('job_status_changed', (job) => {
+            if (['WAITING', 'PRINTING', 'COMPLETED'].includes(job.status) && step !== 4) setStep(4);
+          });
+        }
+      } catch (err) {
+        console.error('Failed to acquire session token:', err);
+        showError('Failed to initialize session. Please reload.');
+      }
+    };
+    acquireSession();
+
+    return () => {
+      if (newSocket) newSocket.close();
+    };
   }, [sessionId]);
 
   useEffect(() => {
@@ -60,7 +86,7 @@ const MobileView = () => {
     if (step === 3 && jobId) {
       interval = setInterval(async () => {
         try {
-          const verifyRes = await axios.get(`${API_URL}/api/payments/verify/${jobId}`);
+          const verifyRes = await axios.get(`${API_URL}/api/payments/verify/${jobId}`, { headers: authHeaders() });
           if (verifyRes.data.success && verifyRes.data.job.status !== 'PENDING_PAYMENT') {
             setStep(4);
           }
@@ -127,7 +153,7 @@ const MobileView = () => {
 
     try {
       const response = await axios.post(`${API_URL}/api/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data', ...authHeaders() }
       });
       if (response.data.success) {
         const data = response.data.file;
@@ -157,10 +183,13 @@ const MobileView = () => {
   const handlePrintSettingsSubmit = async () => {
     setIsSubmittingSettings(true);
     try {
-      const res = await axios.post(`${API_URL}/api/jobs`, { file: fileData, settings, cost: price }, { timeout: 15000 });
+      const res = await axios.post(`${API_URL}/api/jobs`, { file: fileData, settings }, { timeout: 15000, headers: authHeaders() });
       if (res.data.success) {
         setJobId(res.data.job.shortId);
-        socket.emit('payment_initiated', { sessionId, price, jobId: res.data.job.shortId });
+        // Use the server-calculated cost as the authoritative price
+        const serverCost = res.data.job.cost;
+        setPrice(serverCost);
+        socket.emit('payment_initiated', { sessionId, price: serverCost, jobId: res.data.job.shortId });
         setStep(3);
       }
     } catch (err) { 
@@ -194,7 +223,7 @@ const MobileView = () => {
     }
 
     try {
-      const orderRes = await axios.post(`${API_URL}/api/payments/order/${jobId}`, {}, { timeout: 15000 });
+      const orderRes = await axios.post(`${API_URL}/api/payments/order/${jobId}`, {}, { timeout: 15000, headers: authHeaders() });
       if (!orderRes.data.success) {
         showError('Failed to create order.');
         setIsInitializingPayment(false);
@@ -211,7 +240,7 @@ const MobileView = () => {
         }
         if (result.paymentDetails) {
           try {
-            const verifyRes = await axios.get(`${API_URL}/api/payments/verify/${jobId}`);
+            const verifyRes = await axios.get(`${API_URL}/api/payments/verify/${jobId}`, { headers: authHeaders() });
             if (verifyRes.data.success && verifyRes.data.job.status !== 'PENDING_PAYMENT') {
               setStep(4);
             }

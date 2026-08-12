@@ -2,8 +2,14 @@ const prisma = require('../../utils/prisma');
 const crypto = require('crypto');
 const AppError = require('../../utils/AppError');
 
-const getMachines = async () => {
+const getMachines = async (user) => {
+  const where = {};
+  if (user && user.role !== 'SUPERADMIN') {
+    where.companyId = user.companyId;
+  }
+
   return await prisma.machine.findMany({
+    where,
     include: { company: true, printerStatuses: { take: 1, orderBy: { timestamp: 'desc' } } }
   });
 };

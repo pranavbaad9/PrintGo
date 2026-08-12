@@ -32,16 +32,13 @@ if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir);
 }
 
-const socket = io(BACKEND_URL, { transports: ['websocket'] });
+const socket = io(BACKEND_URL, { 
+  transports: ['websocket'],
+  auth: { machineKey: MACHINE_KEY }
+});
 
 socket.on('connect', () => {
   console.log(`✅ Connected to cloud backend! (Socket ID: ${socket.id})`);
-  
-  // Register as printer agent
-  socket.emit('register_printer', { 
-    printerName: PRINTER_NAME || 'Windows Default',
-    machineKey: MACHINE_KEY
-  });
   
   // Periodically send printer status
   setInterval(() => {
@@ -130,6 +127,7 @@ socket.on('physical_print_job', async (jobData) => {
       method: 'GET',
       url: fileUrl,
       responseType: 'stream',
+      headers: { 'x-machine-key': MACHINE_KEY }
     });
 
     const writer = fs.createWriteStream(localFilePath);

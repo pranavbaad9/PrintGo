@@ -63,6 +63,13 @@ const cashfreeWebhook = async (req, res, next) => {
     const event = req.body;
     if (event.type === 'PAYMENT_SUCCESS_WEBHOOK') {
       const orderId = event.data.order.order_id;
+      
+      // Idempotency check: if payment is already marked SUCCESS, skip
+      const payment = await prisma.payment.findUnique({ where: { gatewayOrderId: orderId } });
+      if (payment && payment.status === 'SUCCESS') {
+        return res.status(200).send('Already processed');
+      }
+
       const updatedJob = await paymentsService.verifyPayment(orderId);
       
       if (updatedJob) {

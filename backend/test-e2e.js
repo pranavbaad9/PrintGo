@@ -5,7 +5,7 @@ async function run() {
   try {
     console.log('1. Logging in as superadmin...');
     const loginRes = await axios.post(`${API}/auth/login`, {
-      username: 'admin',
+      email: 'admin',
       password: 'printgo_admin' // From .env
     });
     
@@ -15,33 +15,32 @@ async function run() {
 
     const adminConfig = { headers: { Authorization: `Bearer ${superAdminToken}` } };
 
-    console.log('2. Creating a Franchisee...');
-    const fRes = await axios.post(`${API}/franchisees`, {
+    console.log('2. Creating a Company (Franchisee)...');
+    const fRes = await axios.post(`${API}/companies`, {
       name: 'E2E Test Store',
-      email: `test_${Date.now()}@example.com`,
-      phone: '9998887776'
+      contactEmail: `test_${Date.now()}@example.com`,
+      contactPhone: '9998887776'
     }, adminConfig);
     
-    if (!fRes.data.success) throw new Error('Franchisee creation failed');
-    const franchiseeId = fRes.data.franchisee.id;
-    const franchiseePass = fRes.data.defaultPassword;
-    console.log(`✅ Franchisee created. ID: ${franchiseeId}`);
+    if (!fRes.data.success) throw new Error('Company creation failed');
+    const companyId = fRes.data.company.id;
+    const companyPass = fRes.data.defaultPassword;
+    console.log(`✅ Company created. ID: ${companyId}`);
 
-    console.log('3. Creating a Machine for Franchisee...');
+    console.log('3. Creating a Machine for Company...');
     const mRes = await axios.post(`${API}/machines`, {
       name: 'E2E Kiosk',
       location: 'Mall',
-      franchiseeId,
-      subscriptionPlan: 'Free'
+      companyId
     }, adminConfig);
 
     if (!mRes.data.success) throw new Error('Machine creation failed');
     console.log(`✅ Machine created. Key: ${mRes.data.machine.machineKey}`);
 
-    console.log('4. Logging in as Franchisee...');
+    console.log('4. Logging in as Company Admin...');
     const floginRes = await axios.post(`${API}/auth/login`, {
-      username: fRes.data.franchisee.email,
-      password: franchiseePass
+      email: fRes.data.company.contactEmail,
+      password: companyPass
     });
 
     if (!floginRes.data.success) throw new Error('Franchisee login failed');
@@ -50,8 +49,8 @@ async function run() {
 
     const fConfig = { headers: { Authorization: `Bearer ${fToken}` } };
 
-    console.log('5. Fetching Franchisee Dashboard data...');
-    const dashRes = await axios.get(`${API}/franchisee/my-machines`, fConfig);
+    console.log('5. Fetching Company Dashboard data...');
+    const dashRes = await axios.get(`${API}/machines/my-machines`, fConfig);
     if (!dashRes.data.success) throw new Error('Failed to fetch dashboard data');
     console.log(`✅ Dashboard data fetched. Machines count: ${dashRes.data.machines.length}`);
 
