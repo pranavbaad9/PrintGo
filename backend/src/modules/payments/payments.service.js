@@ -109,7 +109,50 @@ const verifyPayment = async (orderId) => {
   }
 };
 
+const refundPayment = async (jobId) => {
+  const job = await prisma.printJob.findUnique({
+    where: { shortId: jobId },
+    include: { payment: true }
+  });
+  
+  if (!job) throw new AppError('Job not found', 404);
+  if (!job.payment) throw new AppError('No payment found for this job', 400);
+  if (job.payment.status !== 'SUCCESS') throw new AppError('Payment is not in SUCCESS state', 400);
+  if (!job.payment.gatewayOrderId) throw new AppError('No gateway order ID found', 400);
+
+  const config = getCashfreeConfig();
+  
+  try {
+    const refundData = {
+      refund_amount: job.payment.amount,
+      refund_id: `ref_${job.shortId}_${Date.now()}`,
+      refund_note: "PrintGo Automated Refund"
+    };
+
+    const response = await axios.post(`${config.url}/${job.payment.gatewayOrderId}/refunds`, refundData, { headers: config.headers });
+    
+    if (response.data.refund_status === 'SUCCESS' || response.data.refund_status === 'PENDING') {
+      await prisma.payment.update({
+        where: { id: job.payment.id },
+        data: { status: 'REFUNDED' }
+      });
+      
+      const updatedJob = await prisma.printJob.update({
+        where: { id: job.id },
+        data: { status: 'REFUNDED' }
+      });
+      
+      return updatedJob;
+    } else {
+      throw new Error(`Unexpected refund status: ${response.data.refund_status}`);
+    }
+  } catch (error) {
+    logger.error("Cashfree refund error:", error?.response?.data || error.message);
+    throw new AppError('Failed to process refund with gateway', 500);
+  }
+};
+
 module.exports = {
   createOrder,
-  verifyPayment
-};
+  verifyPayment,
+  refundPayment};

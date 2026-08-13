@@ -84,8 +84,20 @@ const cashfreeWebhook = async (req, res, next) => {
   }
 };
 
+const refundOrder = async (req, res, next) => {
+  try {
+    const { id } = req.params; // jobId
+    const updatedJob = await paymentsService.refundPayment(id);
+    req.app.get('io').emit('job_status_changed', updatedJob);
+    res.json({ success: true, job: updatedJob });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createCashfreeOrder,
   verifyPayment,
-  cashfreeWebhook
+  cashfreeWebhook,
+  refundOrder
 };

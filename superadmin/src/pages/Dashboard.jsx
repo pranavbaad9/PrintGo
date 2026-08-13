@@ -87,35 +87,52 @@ export default function Dashboard() {
       </div>
 
       <div className="glass-panel">
-        <h2 style={{ marginBottom: '16px', fontSize: '1.25rem' }}>Recent Platform Activity</h2>
+        <h2 style={{ marginBottom: '16px', fontSize: '1.25rem' }}>Recent Print Jobs & Refunds</h2>
         <div className="table-container">
           <table>
             <thead>
               <tr>
-                <th>Company</th>
-                <th>Action</th>
-                <th>Date</th>
+                <th>Job ID</th>
                 <th>Status</th>
+                <th>Amount</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
+              {/* Note: This should ideally map over real fetched jobs */}
               <tr>
-                <td>City University Library</td>
-                <td>New Kiosk Provisioned</td>
-                <td>2 mins ago</td>
-                <td><span className="badge success">Completed</span></td>
+                <td>Job_882A9C</td>
+                <td><span className="badge danger">FAILED (Paper Jam)</span></td>
+                <td>₹10.00</td>
+                <td>
+                  <button 
+                    onClick={async () => {
+                      if(window.confirm('Process instant Cashfree refund for ₹10?')) {
+                        try {
+                          await api.post('/payments/refund/882A9C');
+                          alert('Refund successful!');
+                        } catch(e) {
+                          alert('Error: ' + (e.response?.data?.message || e.message));
+                        }
+                      }
+                    }}
+                    style={{ background: '#ef4444', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    Refund Customer
+                  </button>
+                </td>
               </tr>
               <tr>
-                <td>TechHub Co-working</td>
-                <td>Subscription Renewed (Pro)</td>
-                <td>1 hour ago</td>
-                <td><span className="badge success">Success</span></td>
+                <td>Job_114B7D</td>
+                <td><span className="badge success">COMPLETED</span></td>
+                <td>₹40.00</td>
+                <td>-</td>
               </tr>
               <tr>
-                <td>Metro Station Cyber</td>
-                <td>Kiosk Offline Alert</td>
-                <td>3 hours ago</td>
-                <td><span className="badge danger">Warning</span></td>
+                <td>Job_993X1A</td>
+                <td><span className="badge" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>REFUNDED</span></td>
+                <td>₹15.00</td>
+                <td>-</td>
               </tr>
             </tbody>
           </table>
