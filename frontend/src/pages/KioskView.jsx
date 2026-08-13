@@ -9,7 +9,7 @@ import { Step3Settings } from '../components/kiosk/Step3Settings';
 import { Step4Payment } from '../components/kiosk/Step4Payment';
 import { Step5Status } from '../components/kiosk/Step5Status';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_URL || 'https://printgo-ssoi.onrender.com';
 
 const KioskView = () => {
   const [sessionId, setSessionId] = useState('');

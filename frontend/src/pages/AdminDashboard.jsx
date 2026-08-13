@@ -8,7 +8,7 @@ import { LivePrintQueue } from '../components/admin/LivePrintQueue';
 import { AuditHistory } from '../components/admin/AuditHistory';
 import { MachinesList } from '../components/admin/MachinesList';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_URL || 'https://printgo-ssoi.onrender.com';
 
 const AdminDashboard = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
