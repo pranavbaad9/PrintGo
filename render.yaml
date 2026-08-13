@@ -3,7 +3,7 @@ services:
     name: printgo-backend
     env: node
     rootDir: backend
-    buildCommand: npm install && npx prisma generate && npx prisma db push --force-reset
+    buildCommand: npm install && npx prisma generate && npx prisma db push
     startCommand: npm start
     envVars:
       - key: NODE_VERSION
