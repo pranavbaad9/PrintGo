@@ -24,10 +24,10 @@ const createJobSchema = z.object({
   body: z.object({
     file: z.object({
       originalName: z.string(),
-      fileName: z.string(),
-      mimeType: z.string(),
+      filename: z.string(),
+      mimetype: z.string(),
       size: z.number(),
-      url: z.string(),
+      pages: z.number().optional(),
     }),
     settings: z.object({
       color: z.enum(['bw', 'color']).default('bw'),
