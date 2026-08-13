@@ -176,3 +176,8 @@ socket.on('physical_print_job', async (jobData) => {
     socket.emit('print_spooler_error', { jobId: jobData.jobId, error: error.message });
   }
 });
+
+// Prevent Node.js from exiting prematurely
+setInterval(() => {
+  // Keeping event loop alive
+}, 60000);

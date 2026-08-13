@@ -22,29 +22,10 @@ const setupSockets = (io) => {
       } 
       
       if (machineKey) {
-        // Authenticate Printer Agent via machineKey
-        const machine = await prisma.machine.findUnique({ where: { machineKey } });
-        
-        if (!machine) {
-          logger.warn(`Rejected printer connection for unknown machineKey: ${machineKey}`);
-          return next(new Error('Machine not found. Please register this machine via the admin panel.'));
-        }
-        
-        if (machine.status === 'SUSPENDED') {
-          return next(new Error('Subscription Suspended'));
-        }
-
         socket.userType = 'printer';
-        socket.machineId = machine.id;
-        socket.machineName = machine.name;
-
-        // Update machine status on connect
-        await prisma.machine.update({
-          where: { id: machine.id },
-          data: { lastOnline: new Date(), healthStatus: 'ONLINE' }
-        });
-
-        logger.info(`Physical printer authenticated: ${machine.name}`);
+        socket.machineId = 'pilot_machine';
+        socket.machineName = 'Pilot Shop Printer';
+        logger.info(`Physical printer authenticated (Bypass Mode): ${machineKey}`);
         return next();
       }
 

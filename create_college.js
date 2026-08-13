@@ -1,15 +1,15 @@
 
 const axios = require('axios');
 // Uses your live Render backend
-const API = 'http://localhost:5000/api';
+const API = 'https://printgo-ssoi.onrender.com/api';
 
 async function setupCollege() {
   try {
     console.log('Logging into live server...');
     // Make sure these match the ADMIN_USER and ADMIN_PASS in your Render Environment Variables!
     const loginRes = await axios.post(API + '/auth/login', {
-      email: 'superadmin@printgo.com', 
-      password: 'Admin@123!'
+      email: 'admin', 
+      password: 'pg_admin_P#9xK2m$Q'
     });
     
     const config = { headers: { Authorization: 'Bearer ' + loginRes.data.token } };
