@@ -3,8 +3,7 @@ const crypto = require('crypto');
 const prisma = require('../../utils/prisma');
 const AppError = require('../../utils/AppError');
 const logger = require('../../utils/logger');
-// We will mock startPrintingProcess here for now, eventually it should be handled via a JobService or QueueService
-const { startPrintingProcess } = require('../../services/queueService');
+const { isValidPaymentTransition, isValidJobTransition } = require('../../utils/stateMachine');
 
 const getCashfreeConfig = () => {
   const isProd = process.env.CASHFREE_SECRET_KEY && process.env.CASHFREE_SECRET_KEY.includes('prod');
@@ -78,8 +77,15 @@ const verifyPayment = async (orderId) => {
   const payment = await prisma.payment.findUnique({ where: { gatewayOrderId: orderId } });
   if (!payment) throw new AppError('Payment not found', 404);
 
+  // Already processed — return the linked job (idempotent)
   if (payment.status === 'SUCCESS') {
     return await prisma.printJob.findFirst({ where: { paymentId: payment.id } });
+  }
+
+  // Validate payment state transition
+  if (!isValidPaymentTransition(payment.status, 'SUCCESS')) {
+    logger.warn(`Payment ${orderId}: cannot transition from ${payment.status} to SUCCESS`);
+    return null;
   }
 
   const config = getCashfreeConfig();
@@ -88,18 +94,32 @@ const verifyPayment = async (orderId) => {
     const response = await axios.get(`${config.url}/${orderId}`, { headers: config.headers });
     
     if (response.data.order_status === 'PAID') {
-      await prisma.payment.update({
-        where: { id: payment.id },
-        data: { status: 'SUCCESS' }
+      // Use a transaction to atomically update payment + job status
+      // This prevents race conditions where two concurrent calls both update
+      const result = await prisma.$transaction(async (tx) => {
+        // Re-read payment inside transaction to get the latest status
+        const freshPayment = await tx.payment.findUnique({ where: { id: payment.id } });
+        if (freshPayment.status === 'SUCCESS') {
+          // Already processed by another concurrent request
+          return await tx.printJob.findFirst({ where: { paymentId: payment.id } });
+        }
+
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: { status: 'SUCCESS' }
+        });
+        
+        const job = await tx.printJob.findFirst({ where: { paymentId: payment.id } });
+        if (job && job.status === 'PENDING_PAYMENT' && isValidJobTransition(job.status, 'WAITING')) {
+          return await tx.printJob.update({
+            where: { id: job.id },
+            data: { status: 'WAITING' }
+          });
+        }
+        return job;
       });
       
-      const job = await prisma.printJob.findFirst({ where: { paymentId: payment.id } });
-      if (job && job.status === 'PENDING_PAYMENT') {
-        return await prisma.printJob.update({
-          where: { id: job.id },
-          data: { status: 'WAITING' }
-        });
-      }
+      return result;
     }
     
     return null;

@@ -1,6 +1,7 @@
 const { Queue, Worker } = require('bullmq');
 const { connection } = require('./redisClient');
 const prisma = require('../utils/prisma');
+const { isValidJobTransition } = require('../utils/stateMachine');
 
 let printQueue = null;
 let useRedis = !!process.env.REDIS_HOST; // Use Redis if configured
@@ -24,6 +25,12 @@ const processJob = async (shortId) => {
     });
     if (!dbJob) return;
 
+    // Validate state transition using state machine
+    if (!isValidJobTransition(dbJob.status, 'PRINTING')) {
+      console.warn(`Job ${shortId}: cannot transition from ${dbJob.status} to PRINTING, skipping`);
+      return;
+    }
+
     if (dbJob.status === 'WAITING') {
       const updatedJob = await prisma.printJob.update({
         where: { shortId },
@@ -32,7 +39,11 @@ const processJob = async (shortId) => {
       });
       
       if (globalIo) {
-        globalIo.emit('job_status_changed', updatedJob);
+        // Emit status change to machine room + admins only
+        if (updatedJob.machineId) {
+          globalIo.to(`machine_${updatedJob.machineId}`).emit('job_status_changed', updatedJob);
+        }
+        globalIo.to('admins').emit('job_status_changed', updatedJob);
         
         const printData = {
           jobId: updatedJob.shortId,
@@ -49,7 +60,9 @@ const processJob = async (shortId) => {
         if (updatedJob.machineId) {
           globalIo.to(`machine_${updatedJob.machineId}`).emit('physical_print_job', printData);
         } else {
-          globalIo.emit('physical_print_job', printData);
+          // No machineId assigned — cannot send to a specific printer
+          // Log a warning instead of broadcasting to ALL sockets
+          console.warn(`Job ${updatedJob.shortId} has no machineId — cannot route to printer agent`);
         }
       }
       
@@ -133,21 +146,43 @@ const calculateEstimatedWaitTime = async (shortId) => {
   }
 };
 
-// Cleanup abandoned jobs every 15 minutes
+// Cleanup abandoned jobs and stuck PRINTING jobs every 15 minutes
 setInterval(async () => {
   try {
     const oneHourAgo = new Date(Date.now() - 3600000);
+    const fifteenMinsAgo = new Date(Date.now() - 15 * 60000);
+
+    // 1. Delete abandoned PENDING_PAYMENT jobs
     const result = await prisma.printJob.deleteMany({
       where: {
         status: 'PENDING_PAYMENT',
-        createdAt: {
-          lt: oneHourAgo
-        }
+        createdAt: { lt: oneHourAgo }
+      }
+    });
+    if (result.count > 0) {
+      console.log(`🧹 Cleaned up ${result.count} abandoned jobs from database.`);
+    }
+
+    // 2. P3-004: Fail and refund stuck PRINTING jobs (Agent crash recovery)
+    const stuckJobs = await prisma.printJob.findMany({
+      where: {
+        status: 'PRINTING',
+        updatedAt: { lt: fifteenMinsAgo }
       }
     });
 
-    if (result.count > 0) {
-      console.log(`🧹 Cleaned up ${result.count} abandoned jobs from database.`);
+    for (const job of stuckJobs) {
+      console.error(`⚠️  Job ${job.shortId} stuck in PRINTING for >15 mins. Marking FAILED.`);
+      await prisma.printJob.update({
+        where: { id: job.id },
+        data: { status: 'FAILED' }
+      });
+      
+      if (job.paymentId) {
+        console.log(`Initiating automated refund for stuck job ${job.shortId}...`);
+        const paymentsService = require('../modules/payments/payments.service');
+        await paymentsService.refundPaymentByJob(job.id);
+      }
     }
   } catch (error) {
     console.error('Error during cleanup:', error);

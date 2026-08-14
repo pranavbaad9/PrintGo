@@ -23,7 +23,7 @@ const getAllJobs = async (user) => {
   });
 };
 
-const getJobByShortId = async (shortId) => {
+const getJobByShortId = async (shortId, user = null) => {
   const job = await prisma.printJob.findUnique({
     where: { shortId },
     include: { document: true, machine: true, payment: true }
@@ -31,6 +31,14 @@ const getJobByShortId = async (shortId) => {
   if (!job) {
     throw new AppError('Job not found', 404);
   }
+
+  // P2-002: Multi-tenancy check
+  if (user && user.role !== 'SUPERADMIN') {
+    if (job.machine && job.machine.companyId !== user.companyId) {
+      throw new AppError('Access denied: Job belongs to another company', 403);
+    }
+  }
+
   return job;
 };
 
@@ -73,7 +81,10 @@ const createJob = async (jobData) => {
   return newJob;
 };
 
-const updateJobStatus = async (shortId, status) => {
+const updateJobStatus = async (shortId, status, user = null) => {
+  // P2-002: Check permission first
+  await getJobByShortId(shortId, user);
+
   const job = await prisma.printJob.update({
     where: { shortId },
     data: { status }

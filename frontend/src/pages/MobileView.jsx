@@ -43,10 +43,10 @@ const MobileView = () => {
   useEffect(() => {
     let newSocket = null;
 
-    // Acquire a session token before any API calls
+    // Join an existing server-side session (P0-006)
     const acquireSession = async () => {
       try {
-        const res = await axios.post(`${API_URL}/api/auth/session`, { sessionId });
+        const res = await axios.post(`${API_URL}/api/auth/session/join`, { sessionCode: sessionId });
         if (res.data.success) {
           const token = res.data.sessionToken;
           setSessionToken(token);
@@ -70,8 +70,9 @@ const MobileView = () => {
           });
         }
       } catch (err) {
-        console.error('Failed to acquire session token:', err);
-        showError('Failed to initialize session. Please reload.');
+        console.error('Failed to join session:', err);
+        const errorMsg = err.response?.data?.error || 'Failed to initialize session. Please reload.';
+        showError(errorMsg);
       }
     };
     acquireSession();
@@ -142,8 +143,8 @@ const MobileView = () => {
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 1000 * 1024 * 1024) {
-      showError('File size exceeds 1000MB limit.');
+    if (file.size > 50 * 1024 * 1024) {
+      showError('File size exceeds 50MB limit.');
       return;
     }
 

@@ -7,19 +7,11 @@ const AppError = require('../../utils/AppError');
 
 const router = express.Router();
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, '../../../uploads'));
-  },
-  filename: function (req, file, cb) {
-    const ext = path.extname(file.originalname);
-    cb(null, `${uuidv4()}${ext}`);
-  }
-});
+const { getStorage } = require('../../utils/storage');
 
 const upload = multer({
-  storage: storage,
-  limits: { fileSize: 1000 * 1024 * 1024 }, // 1000 MB limit
+  storage: getStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB limit (was 1000MB — P1-003)
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
       'application/pdf',

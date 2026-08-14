@@ -49,13 +49,18 @@ const parseCustomPageRange = (rangeStr, totalPages) => {
 
 /**
  * Calculate the print cost for a job.
+ * 
+ * All rates are in whole rupees (INR), producing integer results.
+ * If sub-rupee pricing is ever needed, convert to paise (multiply rates by 100)
+ * and update the schema's cost field from Float to Int.
+ * 
  * @param {Object} settings - { color, duplex, copies, pageRangeType, customRange }
  * @param {Object} document - { pages }
  * @returns {{ cost: number, pagesToPrint: number }}
  */
 const calculatePrice = (settings, document) => {
   const totalPages = document.pages || 1;
-  const copies = Math.max(1, parseInt(settings.copies, 10) || 1);
+  const copies = Math.max(1, Math.min(100, parseInt(settings.copies, 10) || 1)); // Cap at 100 copies
 
   const pagesToPrint = settings.pageRangeType === 'custom'
     ? parseCustomPageRange(settings.customRange, totalPages)
@@ -69,6 +74,9 @@ const calculatePrice = (settings, document) => {
   } else {
     cost = pagesToPrint * copies * RATES.BW_SINGLE_PER_SIDE;
   }
+
+  // Enforce minimum price — prevents ₹0 jobs from edge cases
+  cost = Math.max(1, Math.round(cost));
 
   return { cost, pagesToPrint };
 };

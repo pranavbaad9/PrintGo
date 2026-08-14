@@ -1,11 +1,21 @@
 const paymentsService = require('./payments.service');
 const crypto = require('crypto');
 const prisma = require('../../utils/prisma');
-const { startPrintingProcess } = require('../../services/queueService'); // Keep legacy import for now
+const logger = require('../../utils/logger');
+const { startPrintingProcess } = require('../../services/queueService');
 
 const createCashfreeOrder = async (req, res, next) => {
   try {
-    const { id } = req.params; // jobId
+    const { id } = req.params; // jobId (shortId)
+    
+    // IDOR protection: verify the session owns this job
+    if (req.session) {
+      const job = await prisma.printJob.findUnique({ where: { shortId: id } });
+      if (job && job.machineId && req.session.machineId && job.machineId !== req.session.machineId) {
+        return res.status(403).json({ success: false, error: 'Access denied' });
+      }
+    }
+    
     const orderDetails = await paymentsService.createOrder(id);
     res.json({ success: true, ...orderDetails });
   } catch (error) {
@@ -34,9 +44,9 @@ const verifyPayment = async (req, res, next) => {
     const updatedJob = await paymentsService.verifyPayment(job.payment.gatewayOrderId);
     
     if (updatedJob) {
-      req.app.get('io').emit('job_status_changed', updatedJob);
-      // Fallback for queue service
-      if(startPrintingProcess) startPrintingProcess(updatedJob.shortId, req.app.get('io'));
+      // NOTE: Do NOT call startPrintingProcess here.
+      // Printing is triggered ONLY by the Cashfree webhook (single source of truth).
+      // This endpoint only reports the current status to the frontend.
       return res.json({ success: true, job: updatedJob });
     }
 
@@ -51,36 +61,61 @@ const cashfreeWebhook = async (req, res, next) => {
     const signature = req.headers['x-webhook-signature'];
     const timestamp = req.headers['x-webhook-timestamp'];
     
+    if (!signature || !timestamp) {
+      logger.warn('Webhook received without signature or timestamp headers');
+      return res.status(401).send('Missing signature headers');
+    }
+
     const expectedSignature = crypto
       .createHmac('sha256', process.env.CASHFREE_SECRET_KEY)
       .update(timestamp + req.rawBody)
       .digest('base64');
       
     if (signature !== expectedSignature) {
+      logger.warn('Webhook signature mismatch — possible replay or tampering');
       return res.status(401).send('Invalid signature');
     }
 
     const event = req.body;
+    logger.info(`Cashfree webhook received: type=${event.type}`);
+
     if (event.type === 'PAYMENT_SUCCESS_WEBHOOK') {
       const orderId = event.data.order.order_id;
       
-      // Idempotency check: if payment is already marked SUCCESS, skip
+      // Idempotency check: if payment is already marked SUCCESS, skip entirely
       const payment = await prisma.payment.findUnique({ where: { gatewayOrderId: orderId } });
       if (payment && payment.status === 'SUCCESS') {
+        logger.info(`Webhook idempotency: payment ${orderId} already processed, skipping`);
         return res.status(200).send('Already processed');
       }
 
       const updatedJob = await paymentsService.verifyPayment(orderId);
       
       if (updatedJob) {
-        req.app.get('io').emit('job_status_changed', updatedJob);
-        if(startPrintingProcess) startPrintingProcess(updatedJob.shortId, req.app.get('io'));
+        logger.info(`Payment verified for job ${updatedJob.shortId}, triggering print queue`);
+        
+        // Emit status change to relevant clients (machine room + admins, not all sockets)
+        const io = req.app.get('io');
+        if (updatedJob.machineId) {
+          io.to(`machine_${updatedJob.machineId}`).emit('job_status_changed', updatedJob);
+        }
+        io.to('admins').emit('job_status_changed', updatedJob);
+        
+        // ⚡ THIS IS THE SINGLE SOURCE OF TRUTH FOR TRIGGERING PRINTING
+        // The verify endpoint does NOT trigger printing — only this webhook does.
+        // This ensures a job is printed exactly once.
+        if (startPrintingProcess) {
+          startPrintingProcess(updatedJob.shortId, req.app.get('io'));
+        }
       }
     }
     
     res.status(200).send('OK');
   } catch (error) {
-    next(error);
+    logger.error('Webhook processing error:', { error: error.message });
+    // Always return 200 to Cashfree to prevent retries for application errors
+    // (retries would cause duplicate processing risk)
+    res.status(200).send('Error logged');
   }
 };
 
@@ -88,7 +123,13 @@ const refundOrder = async (req, res, next) => {
   try {
     const { id } = req.params; // jobId
     const updatedJob = await paymentsService.refundPayment(id);
-    req.app.get('io').emit('job_status_changed', updatedJob);
+    
+    const io = req.app.get('io');
+    if (updatedJob.machineId) {
+      io.to(`machine_${updatedJob.machineId}`).emit('job_status_changed', updatedJob);
+    }
+    io.to('admins').emit('job_status_changed', updatedJob);
+    
     res.json({ success: true, job: updatedJob });
   } catch (error) {
     next(error);

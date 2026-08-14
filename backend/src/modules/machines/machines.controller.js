@@ -21,7 +21,7 @@ const createMachine = async (req, res, next) => {
 const updateMachine = async (req, res, next) => {
   try {
     const { status } = req.body;
-    const machine = await machinesService.updateMachineStatus(req.params.id, status, req.app.get('io'));
+    const machine = await machinesService.updateMachineStatus(req.params.id, status, req.app.get('io'), req.user);
     res.json({ success: true, machine });
   } catch (error) {
     next(error);

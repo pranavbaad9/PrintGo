@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
 import axios from 'axios';
-import { v4 as uuidv4 } from 'uuid';
 import { WifiOff } from 'lucide-react';
 import { Step1Scan } from '../components/kiosk/Step1Scan';
 import { Step2Connected } from '../components/kiosk/Step2Connected';
@@ -28,16 +27,16 @@ const KioskView = () => {
   const authHeaders = () => sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
 
   useEffect(() => {
-    const id = uuidv4().substring(0, 8);
-    setSessionId(id);
     let newSocket = null;
 
-    // Acquire session token for authenticated API calls
+    // Create a server-side session (P0-006: server generates session code)
     const acquireSession = async () => {
       try {
-        const res = await axios.post(`${API_URL}/api/auth/session`, { sessionId: id });
+        const res = await axios.post(`${API_URL}/api/auth/session/create`, {});
         if (res.data.success) {
           const token = res.data.sessionToken;
+          const code = res.data.sessionCode;
+          setSessionId(code);
           setSessionToken(token);
 
           newSocket = io(API_URL, { 
@@ -48,7 +47,7 @@ const KioskView = () => {
           
           newSocket.on('connect', () => {
             setIsConnected(true);
-            newSocket.emit('join_session', id);
+            newSocket.emit('join_session', code);
           });
           newSocket.on('disconnect', () => setIsConnected(false));
 
@@ -67,7 +66,7 @@ const KioskView = () => {
             });
           });
         }
-      } catch (err) { console.error('Failed to acquire kiosk session token:', err); }
+      } catch (err) { console.error('Failed to acquire kiosk session:', err); }
     };
     acquireSession();
 

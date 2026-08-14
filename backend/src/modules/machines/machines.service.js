@@ -14,12 +14,17 @@ const getMachines = async (user) => {
   });
 };
 
-const getMachineById = async (id) => {
+const getMachineById = async (id, user) => {
   const machine = await prisma.machine.findUnique({
     where: { id },
     include: { company: true }
   });
   if (!machine) throw new AppError('Machine not found', 404);
+  
+  if (user && user.role !== 'SUPERADMIN' && machine.companyId !== user.companyId) {
+    throw new AppError('Access denied: Machine belongs to another company', 403);
+  }
+  
   return machine;
 };
 
@@ -39,7 +44,10 @@ const createMachine = async (data) => {
   });
 };
 
-const updateMachineStatus = async (id, status, io) => {
+const updateMachineStatus = async (id, status, io, user) => {
+  // Check permission first
+  await getMachineById(id, user);
+
   const machine = await prisma.machine.update({
     where: { id },
     data: { status },

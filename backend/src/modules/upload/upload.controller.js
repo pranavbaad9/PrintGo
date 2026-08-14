@@ -7,7 +7,8 @@ const handleUpload = async (req, res, next) => {
       throw new Error('No file uploaded.');
     }
 
-    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    // Use S3 URL if available, otherwise fallback to local URL
+    const fileUrl = req.file.location || `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
     const pages = await uploadService.getPageCount(fileUrl, req.file.mimetype);
 
     res.json({

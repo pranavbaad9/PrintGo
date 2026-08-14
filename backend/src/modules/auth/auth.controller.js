@@ -1,7 +1,9 @@
 const authService = require('./auth.service');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const prisma = require('../../utils/prisma');
 const AppError = require('../../utils/AppError');
+const logger = require('../../utils/logger');
 
 const login = async (req, res, next) => {
   try {
@@ -44,13 +46,15 @@ const getMe = async (req, res, next) => {
   }
 };
 
+/**
+ * POST /api/auth/session/create
+ * Called by the KIOSK to create a new session.
+ * Server generates the session code (displayed in QR), stores it in DB.
+ * Returns: { sessionCode, sessionToken }
+ */
 const createSession = async (req, res, next) => {
   try {
-    const { sessionId, machineId } = req.body;
-
-    if (!sessionId) {
-      return next(new AppError('sessionId is required', 400));
-    }
+    const { machineId } = req.body;
 
     // If machineId is provided, verify it exists and is active
     if (machineId) {
@@ -63,16 +67,94 @@ const createSession = async (req, res, next) => {
       }
     }
 
-    // Issue a short-lived session token (1 hour)
+    // Generate a cryptographically secure session code (12 hex chars = 6 bytes = 281 trillion combinations)
+    const sessionCode = crypto.randomBytes(6).toString('hex');
+    
+    // Session expires in 1 hour
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    // Store session in database
+    const session = await prisma.session.create({
+      data: {
+        code: sessionCode,
+        machineId: machineId || null,
+        status: 'WAITING_FOR_MOBILE',
+        expiresAt,
+      }
+    });
+
+    // Issue a session token for the kiosk
     const sessionToken = jwt.sign(
-      { sessionId, machineId: machineId || null, type: 'session' },
+      { sessionId: session.code, machineId: machineId || null, type: 'session', role: 'kiosk' },
       process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
 
+    logger.info(`Session created: ${session.code} (machine: ${machineId || 'none'})`);
+
+    res.status(200).json({
+      success: true,
+      sessionCode: session.code,
+      sessionToken,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/auth/session/join
+ * Called by the MOBILE phone after scanning the QR code.
+ * Validates the session exists, is active, and not expired.
+ * Returns: { sessionToken }
+ */
+const joinSession = async (req, res, next) => {
+  try {
+    const { sessionCode } = req.body;
+
+    if (!sessionCode) {
+      return next(new AppError('sessionCode is required', 400));
+    }
+
+    // Look up the session in the database
+    const session = await prisma.session.findUnique({ where: { code: sessionCode } });
+
+    if (!session) {
+      return next(new AppError('Invalid session code', 404));
+    }
+
+    if (session.status === 'EXPIRED' || session.status === 'COMPLETED') {
+      return next(new AppError('This session has expired. Please scan a new QR code.', 410));
+    }
+
+    if (new Date() > session.expiresAt) {
+      // Mark as expired in DB
+      await prisma.session.update({
+        where: { id: session.id },
+        data: { status: 'EXPIRED' }
+      });
+      return next(new AppError('This session has expired. Please scan a new QR code.', 410));
+    }
+
+    // Update session status to CONNECTED
+    await prisma.session.update({
+      where: { id: session.id },
+      data: { status: 'CONNECTED' }
+    });
+
+    // Issue a session token for the mobile user
+    const sessionToken = jwt.sign(
+      { sessionId: session.code, machineId: session.machineId || null, type: 'session', role: 'mobile' },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    logger.info(`Mobile joined session: ${session.code}`);
+
     res.status(200).json({
       success: true,
       sessionToken,
+      machineId: session.machineId,
     });
   } catch (error) {
     next(error);
@@ -83,5 +165,6 @@ module.exports = {
   login,
   logout,
   getMe,
-  createSession
+  createSession,
+  joinSession
 };

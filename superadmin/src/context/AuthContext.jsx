@@ -4,7 +4,7 @@ import axios from 'axios';
 const AuthContext = createContext();
 
 export const api = axios.create({
-  baseURL: 'https://printgo-ssoi.onrender.com/api',
+  baseURL: (import.meta.env.VITE_API_URL || 'https://printgo-ssoi.onrender.com') + '/api',
   withCredentials: true,
 });
 
