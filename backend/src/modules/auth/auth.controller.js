@@ -54,16 +54,24 @@ const getMe = async (req, res, next) => {
  */
 const createSession = async (req, res, next) => {
   try {
-    const { machineId } = req.body;
+    let { machineId } = req.body;
+    let assignedMachineId = machineId;
 
     // If machineId is provided, verify it exists and is active
-    if (machineId) {
-      const machine = await prisma.machine.findUnique({ where: { id: machineId } });
+    if (assignedMachineId) {
+      const machine = await prisma.machine.findUnique({ where: { id: assignedMachineId } });
       if (!machine) {
         return next(new AppError('Machine not found', 404));
       }
       if (machine.status === 'SUSPENDED') {
         return next(new AppError('Machine is suspended', 403));
+      }
+    } else {
+      // Fallback for kiosk testing without explicit URL parameters:
+      const firstMachine = await prisma.machine.findFirst({ where: { status: 'ACTIVE' } });
+      if (firstMachine) {
+        assignedMachineId = firstMachine.id;
+        logger.info(`No machineId provided for session; falling back to first active machine: ${assignedMachineId}`);
       }
     }
 
@@ -77,7 +85,7 @@ const createSession = async (req, res, next) => {
     const session = await prisma.session.create({
       data: {
         code: sessionCode,
-        machineId: machineId || null,
+        machineId: assignedMachineId || null,
         status: 'WAITING_FOR_MOBILE',
         expiresAt,
       }
@@ -85,7 +93,7 @@ const createSession = async (req, res, next) => {
 
     // Issue a session token for the kiosk
     const sessionToken = jwt.sign(
-      { sessionId: session.code, machineId: machineId || null, type: 'session', role: 'kiosk' },
+      { sessionId: session.code, machineId: assignedMachineId || null, type: 'session', role: 'kiosk' },
       process.env.JWT_SECRET,
       { expiresIn: '1h' }
     );
