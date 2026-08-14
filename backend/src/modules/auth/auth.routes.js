@@ -23,13 +23,16 @@ router.post('/setup-machine', async (req, res) => {
   try {
     let machine = await prisma.machine.findFirst({ where: { status: 'ACTIVE' } });
     if (!machine) {
+      const crypto = require('crypto');
+      const generatedKey = crypto.randomBytes(16).toString('hex');
       machine = await prisma.machine.create({
         data: {
           name: 'Main Kiosk',
           location: 'Lobby',
           status: 'ACTIVE',
           printerType: 'BLACK_AND_WHITE',
-          model: 'PrintGo V1'
+          model: 'PrintGo V1',
+          machineKey: generatedKey
         }
       });
     }

@@ -4,21 +4,25 @@ const path = require('path');
 
 const URL = 'https://printgo-backend.onrender.com/api/auth/session/create';
 // Or maybe the frontend is talking to ssoi? Let's check both
-const URL2 = 'https://printgo-ssoi.onrender.com/api/auth/session/create';
+const URL2 = 'https://printgo-ssoi.onrender.com/api/auth/setup-machine';
 
 async function poll() {
   console.log('Polling Render for exposed machine key...');
   try {
     const res = await axios.post(URL2, {});
-    if (res.data.tempMachineKeyForSetup) {
-      console.log('Found key on ssoi:', res.data.tempMachineKeyForSetup);
-      updateEnv(res.data.tempMachineKeyForSetup, 'https://printgo-ssoi.onrender.com');
+    if (res.data.machineKey) {
+      console.log('Found key on ssoi:', res.data.machineKey);
+      updateEnv(res.data.machineKey, 'https://printgo-ssoi.onrender.com');
       process.exit(0);
     } else {
       console.log('Key not yet exposed. Deploying...');
     }
   } catch (err) {
-    console.error('Error on ssoi:', err.message);
+    if (err.response && err.response.data) {
+      console.error('Error on ssoi:', err.response.status, err.response.data);
+    } else {
+      console.error('Error on ssoi:', err.message);
+    }
   }
 
   setTimeout(poll, 10000);
