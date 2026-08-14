@@ -41,11 +41,11 @@ const verifyPayment = async (req, res, next) => {
        throw new Error('No payment initiated');
     }
 
-    const updatedJob = await paymentsService.verifyPayment(job.payment.gatewayOrderId);
+    const { updatedJob, wasJustUpdated } = await paymentsService.verifyPayment(job.payment.gatewayOrderId);
     
     if (updatedJob) {
       // P4-002: Fallback trigger if Webhook hasn't arrived yet
-      if (updatedJob.status === 'WAITING') {
+      if (updatedJob.status === 'WAITING' && wasJustUpdated) {
         const io = req.app.get('io');
         if (updatedJob.machineId) {
           io.to(`machine_${updatedJob.machineId}`).emit('job_status_changed', updatedJob);
@@ -98,10 +98,10 @@ const cashfreeWebhook = async (req, res, next) => {
         return res.status(200).send('Already processed');
       }
 
-      const updatedJob = await paymentsService.verifyPayment(orderId);
+      const { updatedJob, wasJustUpdated } = await paymentsService.verifyPayment(orderId);
       
       if (updatedJob) {
-        logger.info(`Payment verified for job ${updatedJob.shortId}, triggering print queue`);
+        logger.info(`Payment verified for job ${updatedJob.shortId}, wasJustUpdated: ${wasJustUpdated}`);
         
         // Emit status change to relevant clients (machine room + admins, not all sockets)
         const io = req.app.get('io');
@@ -111,9 +111,9 @@ const cashfreeWebhook = async (req, res, next) => {
         io.to('admins').emit('job_status_changed', updatedJob);
         
         // ⚡ THIS IS THE SINGLE SOURCE OF TRUTH FOR TRIGGERING PRINTING
-        // The verify endpoint does NOT trigger printing — only this webhook does.
-        // This ensures a job is printed exactly once.
-        if (startPrintingProcess) {
+        // Only trigger if we were the thread that actually updated the state
+        if (startPrintingProcess && wasJustUpdated) {
+          logger.info(`Triggering print queue for job ${updatedJob.shortId}`);
           startPrintingProcess(updatedJob.shortId, req.app.get('io'));
         }
       }

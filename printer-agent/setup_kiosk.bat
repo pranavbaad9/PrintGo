@@ -43,20 +43,14 @@ echo  PrintGo Kiosk Setup - Step 3: Chrome Kiosk Mode
 echo ================================================
 echo.
 
-REM Create a shortcut to launch Chrome in kiosk mode
-REM Replace KIOSK_URL with your actual deployed frontend URL
-set KIOSK_URL=https://your-printgo-frontend.vercel.app/kiosk
-
-REM Create a batch file that launches Chrome in kiosk mode
-echo @echo off > "%USERPROFILE%\Desktop\PrintGo_Kiosk.bat"
-echo start "" "C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk --disable-infobars --disable-session-crashed-bubble --disable-translate --noerrdialogs --no-first-run --incognito "%KIOSK_URL%" >> "%USERPROFILE%\Desktop\PrintGo_Kiosk.bat"
-
-echo Created: %USERPROFILE%\Desktop\PrintGo_Kiosk.bat
-
-REM Add Chrome kiosk to Windows startup
-copy "%USERPROFILE%\Desktop\PrintGo_Kiosk.bat" "%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\PrintGo_Kiosk.bat"
-echo Chrome kiosk mode added to Windows startup.
-
+echo [SECURITY WARNING] The legacy "--kiosk" switch is insecure and easily bypassed.
+echo We no longer automatically create a shortcut for it.
+echo.
+echo Please configure Windows Assigned Access (Shell Launcher) instead:
+echo   1. Go to Windows Settings > Accounts > Family & other users
+echo   2. Set up a kiosk (Assigned access)
+echo   3. Choose Microsoft Edge or Google Chrome
+echo   4. Set the URL to your deployed frontend (e.g. https://your-printgo-frontend.vercel.app/kiosk)
 echo.
 echo ================================================
 echo  PrintGo Kiosk Setup - Step 4: Windows Hardening
@@ -97,16 +91,15 @@ echo    [x] Task Manager disabled
 echo    [x] Right-click disabled
 echo.
 echo  IMPORTANT NEXT STEPS:
-echo    1. Edit PrintGo_Kiosk.bat to set your real frontend URL
-echo    2. Configure Windows Auto-Login:
+echo    1. Configure Windows Auto-Login:
 echo       - Run: netplwiz
 echo       - Uncheck "Users must enter a username and password"
 echo       - Enter the kiosk user credentials
-echo    3. Test by rebooting the PC
-echo    4. For maximum security, use Windows 10/11 Assigned Access:
+echo    2. For maximum security, use Windows 10/11 Assigned Access:
 echo       - Settings > Accounts > Family ^& other users
-echo       - Set up assigned access > Choose Chrome
-echo.
+echo       - Set up assigned access > Choose Chrome or Edge
+echo       - Enter your frontend URL
+echo    3. Test by rebooting the PC
 echo  To UNDO all changes, run: setup_kiosk_undo.bat
 echo.
 pause

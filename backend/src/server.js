@@ -64,11 +64,12 @@ app.use(cookieParser());
 
 // Uploads directory
 const { fileAuth } = require('./middlewares/fileAuth');
+const { serveDocument } = require('./modules/files/file.controller');
 const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
-app.use('/uploads', fileAuth, express.static(uploadsDir));
+app.get('/uploads/:filename', fileAuth, serveDocument);
 
 // Routes
 const authRoutes = require('./modules/auth/auth.routes');

@@ -193,11 +193,18 @@ const setupSockets = (io) => {
 
         const failedJob = await prisma.printJob.update({
           where: { shortId: jobId },
-          data: { status: 'FAILED' }
+          data: { status: 'FAILED' },
+          include: { document: true }
         });
 
         io.to(`machine_${socket.machineId}`).emit('job_status_changed', failedJob);
         io.to('admins').emit('job_status_changed', failedJob);
+
+        // P1-003: Delete document file when job fails
+        if (failedJob.document && failedJob.document.filename) {
+          const { deleteFile } = require('./utils/storage');
+          setTimeout(() => deleteFile(failedJob.document.filename), 5 * 60 * 1000);
+        }
 
         // P3-002: Automated Refund on Print Failure
         if (failedJob.paymentId) {
@@ -230,6 +237,12 @@ const setupSockets = (io) => {
         });
         io.to(`machine_${socket.machineId}`).emit('job_status_changed', failedJob);
         io.to('admins').emit('job_status_changed', failedJob);
+
+        // P1-003: Delete document file when job fails
+        if (failedJob.document && failedJob.document.filename) {
+          const { deleteFile } = require('./utils/storage');
+          setTimeout(() => deleteFile(failedJob.document.filename), 5 * 60 * 1000);
+        }
       } catch (err) {
         logger.error(`Failed to update job ${jobId} to FAILED:`, err);
         io.to(`machine_${socket.machineId}`).emit('job_status_changed', { id: 'error', shortId: jobId, status: 'FAILED', error });

@@ -79,13 +79,13 @@ const verifyPayment = async (orderId) => {
 
   // Already processed — return the linked job (idempotent)
   if (payment.status === 'SUCCESS') {
-    return await prisma.printJob.findFirst({ where: { paymentId: payment.id } });
+    return { updatedJob: await prisma.printJob.findFirst({ where: { paymentId: payment.id } }), wasJustUpdated: false };
   }
 
   // Validate payment state transition
   if (!isValidPaymentTransition(payment.status, 'SUCCESS')) {
     logger.warn(`Payment ${orderId}: cannot transition from ${payment.status} to SUCCESS`);
-    return null;
+    return { updatedJob: null, wasJustUpdated: false };
   }
 
   const config = getCashfreeConfig();
@@ -101,7 +101,7 @@ const verifyPayment = async (orderId) => {
         const freshPayment = await tx.payment.findUnique({ where: { id: payment.id } });
         if (freshPayment.status === 'SUCCESS') {
           // Already processed by another concurrent request
-          return await tx.printJob.findFirst({ where: { paymentId: payment.id } });
+          return { updatedJob: await tx.printJob.findFirst({ where: { paymentId: payment.id } }), wasJustUpdated: false };
         }
 
         await tx.payment.update({
@@ -111,18 +111,19 @@ const verifyPayment = async (orderId) => {
         
         const job = await tx.printJob.findFirst({ where: { paymentId: payment.id } });
         if (job && job.status === 'PENDING_PAYMENT' && isValidJobTransition(job.status, 'WAITING')) {
-          return await tx.printJob.update({
+          const updatedJob = await tx.printJob.update({
             where: { id: job.id },
             data: { status: 'WAITING' }
           });
+          return { updatedJob, wasJustUpdated: true };
         }
-        return job;
+        return { updatedJob: job, wasJustUpdated: false };
       });
       
       return result;
     }
     
-    return null;
+    return { updatedJob: null, wasJustUpdated: false };
   } catch (error) {
     logger.error("Payment verify error:", error?.response?.data || error.message);
     throw new AppError('Failed to verify payment', 500);

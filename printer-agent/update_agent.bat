@@ -8,16 +8,20 @@ REM Ensure we are in the correct directory
 cd /d "%~dp0"
 
 REM Pull latest changes from the main branch
-git fetch origin
-git reset --hard origin/main
+echo [SECURITY WARNING] Over-The-Air (OTA) updates are temporarily disabled!
+echo OTA updates require a cryptographically signed payload mechanism to prevent RCE.
+echo Please update the agent manually until this is resolved.
 
-echo Installing dependencies...
-npm install --production
+REM git fetch origin
+REM git reset --hard origin/main
 
-echo Restarting PM2 agent process...
-pm2 restart printgo-agent
+echo Skipping dependency installation...
+REM npm install --production
+
+echo Skipping PM2 restart...
+REM pm2 restart printgo-agent
 
 echo ==================================================
-echo OTA Update Complete! Agent is running latest version.
+echo OTA Update Skipped.
 echo ==================================================
 pause

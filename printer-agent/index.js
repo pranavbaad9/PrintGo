@@ -25,18 +25,23 @@ if (!MACHINE_KEY) {
 }
 
 // P3-003: Printer Compatibility & Driver Validation
-if (PRINTER_NAME) {
-  try {
-    const { execSync } = require('child_process');
-    const stdout = execSync(`powershell "Get-Printer -Name '${PRINTER_NAME}' -ErrorAction Stop | Select-Object Name | ConvertTo-Json"`).toString();
-    if (!stdout || stdout.trim() === '') {
-      throw new Error('Printer not found');
+async function validatePrinter() {
+    if (process.env.PRINTER_NAME === 'SimulationMode') {
+        console.log(`\n🖨️  Running in SIMULATION MODE. Skipping printer validation.`);
+        return;
     }
-  } catch (err) {
-    console.error(`🔥 FATAL ERROR: Printer '${PRINTER_NAME}' does not exist on this machine.`);
-    console.error('Please verify the PRINTER_NAME in .env matches the Windows printer name exactly.');
-    process.exit(1);
-  }
+    try {
+        await execAsync(`powershell "Get-Printer -Name '${process.env.PRINTER_NAME}' -ErrorAction Stop | Select-Object Name"`);
+        console.log(`\n✅ Validated local printer: ${process.env.PRINTER_NAME}`);
+    } catch (error) {
+        console.error(`\n🔥 FATAL ERROR: Printer '${process.env.PRINTER_NAME}' does not exist on this machine.`);
+        console.error(`Please verify the PRINTER_NAME in .env matches the Windows printer name exactly.\n`);
+        process.exit(1);
+    }
+}
+
+if (PRINTER_NAME) {
+    validatePrinter();
 } else {
   console.warn('⚠️  WARNING: PRINTER_NAME is not set. Running in simulation mode (no physical printing).');
 }
@@ -213,6 +218,7 @@ socket.on('physical_print_job', async (jobData) => {
             clearInterval(pollSpooler);
             console.log(`✅ Job ${jobData.jobId} physically completed (cleared from spooler)!`);
             socket.emit('print_physical_success', { jobId: jobData.jobId });
+            if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
             return;
           }
 
@@ -228,6 +234,7 @@ socket.on('physical_print_job', async (jobData) => {
               clearInterval(pollSpooler);
               console.log(`✅ Job ${jobData.jobId} physically completed (cleared from spooler)!`);
               socket.emit('print_physical_success', { jobId: jobData.jobId });
+              if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
             } else {
               // Check for errors
               const status = ourJob.JobStatus || '';
@@ -236,6 +243,7 @@ socket.on('physical_print_job', async (jobData) => {
                 console.error(`❌ Physical Print Error for Job ${jobData.jobId}: ${status}`);
                 socket.emit('print_physical_error', { jobId: jobData.jobId, error: status });
                 exec(`powershell "Get-PrintJob -PrinterName '${PRINTER_NAME}' | Where-Object DocumentName -like '*${jobData.jobId}*' | Remove-PrintJob"`);
+                if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
               }
             }
           } catch (e) {
@@ -249,18 +257,16 @@ socket.on('physical_print_job', async (jobData) => {
       socket.emit('print_spooler_success', { jobId: jobData.jobId });
       setTimeout(() => {
         socket.emit('print_physical_success', { jobId: jobData.jobId });
+        if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
       }, 3000);
     }
 
-    setTimeout(() => {
-      if (fs.existsSync(localFilePath)) {
-        fs.unlinkSync(localFilePath);
-      }
-    }, 60000);
+
 
   } catch (error) {
     console.error(`❌ ERROR processing Job ${jobData.jobId}:`, error.message);
     socket.emit('print_spooler_error', { jobId: jobData.jobId, error: error.message });
+    if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
   }
 });
 
