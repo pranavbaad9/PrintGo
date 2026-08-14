@@ -82,6 +82,10 @@ socket.on('disconnect', () => {
   console.log(`❌ Disconnected from backend. Attempting to reconnect...`);
 });
 
+socket.on('connect_error', (err) => {
+  console.error(`🔌 Connection Error: ${err.message}`);
+});
+
 const checkPrinterStatus = () => {
   if (!PRINTER_NAME) return;
   // Use powershell to check if printer is offline or out of paper

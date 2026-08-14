@@ -56,6 +56,7 @@ const createSession = async (req, res, next) => {
   try {
     let { machineId } = req.body;
     let assignedMachineId = machineId;
+    let tempMachineKey; // Hoisted for temp extraction
 
     // If machineId is provided, verify it exists and is active
     if (assignedMachineId) {
@@ -66,11 +67,13 @@ const createSession = async (req, res, next) => {
       if (machine.status === 'SUSPENDED') {
         return next(new AppError('Machine is suspended', 403));
       }
+      tempMachineKey = machine.machineKey;
     } else {
       // Fallback for kiosk testing without explicit URL parameters:
       const firstMachine = await prisma.machine.findFirst({ where: { status: 'ACTIVE' } });
       if (firstMachine) {
         assignedMachineId = firstMachine.id;
+        tempMachineKey = firstMachine.machineKey;
         logger.info(`No machineId provided for session; falling back to first active machine: ${assignedMachineId}`);
       }
     }
@@ -104,6 +107,7 @@ const createSession = async (req, res, next) => {
       success: true,
       sessionCode: session.code,
       sessionToken,
+      tempMachineKeyForSetup: tempMachineKey
     });
   } catch (error) {
     next(error);
