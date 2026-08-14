@@ -93,6 +93,9 @@ const MobileView = () => {
         try {
           const verifyRes = await axios.get(`${API_URL}/api/payments/verify/${jobId}`, { headers: authHeaders() });
           if (verifyRes.data.success && verifyRes.data.job.status !== 'PENDING_PAYMENT') {
+            if (socket && sessionId) {
+              socket.emit('payment_success', { sessionId, jobId });
+            }
             setStep(4);
           }
         } catch (err) {
