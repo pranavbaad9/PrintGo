@@ -44,9 +44,19 @@ const verifyPayment = async (req, res, next) => {
     const updatedJob = await paymentsService.verifyPayment(job.payment.gatewayOrderId);
     
     if (updatedJob) {
-      // NOTE: Do NOT call startPrintingProcess here.
-      // Printing is triggered ONLY by the Cashfree webhook (single source of truth).
-      // This endpoint only reports the current status to the frontend.
+      // P4-002: Fallback trigger if Webhook hasn't arrived yet
+      if (updatedJob.status === 'WAITING') {
+        const io = req.app.get('io');
+        if (updatedJob.machineId) {
+          io.to(`machine_${updatedJob.machineId}`).emit('job_status_changed', updatedJob);
+        }
+        io.to('admins').emit('job_status_changed', updatedJob);
+        
+        const { startPrintingProcess } = require('../../../services/queueService');
+        if (startPrintingProcess) {
+          startPrintingProcess(updatedJob.shortId, io);
+        }
+      }
       return res.json({ success: true, job: updatedJob });
     }
 
