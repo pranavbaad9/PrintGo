@@ -260,7 +260,6 @@ socket.on('physical_print_job', async (jobData) => {
           } catch (e) {
             // JSON parse error, ignore and retry next second
           }
-          }
         });
       }, 1000); // Check every second
     } else {
