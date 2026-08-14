@@ -30,8 +30,6 @@ router.post('/setup-machine', async (req, res) => {
           name: 'Main Kiosk',
           location: 'Lobby',
           status: 'ACTIVE',
-          printerType: 'BLACK_AND_WHITE',
-          model: 'PrintGo V1',
           machineKey: generatedKey
         }
       });
