@@ -107,6 +107,11 @@ const setupSockets = (io) => {
       io.to(sessionId).emit('kiosk_payment_success', { jobId });
     });
 
+    socket.on('cancel_session', ({ sessionId }) => {
+      if (!validateSessionOwnership(socket, sessionId)) return;
+      io.to(sessionId).emit('session_cancelled');
+    });
+
     socket.on('heartbeat', async () => {
       if (socket.machineId) {
         try {

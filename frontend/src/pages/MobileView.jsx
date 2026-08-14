@@ -65,6 +65,10 @@ const MobileView = () => {
           newSocket.on('disconnect', () => setIsConnected(false));
 
           newSocket.on('kiosk_payment_success', ({ jobId: j }) => { setJobId(j); setStep(4); });
+          newSocket.on('session_cancelled', () => {
+            showError('Session cancelled by the kiosk. Please scan a new QR code.');
+            setStep(1); // Force back to an invalid state or keep error visible
+          });
           newSocket.on('job_status_changed', (job) => {
             if (['WAITING', 'PRINTING', 'COMPLETED'].includes(job.status) && step !== 4) setStep(4);
           });

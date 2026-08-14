@@ -136,7 +136,10 @@ const KioskView = () => {
       {/* Manual Start Over Button */}
       {step > 1 && (
         <button 
-          onClick={() => window.location.reload()}
+          onClick={() => {
+            if (socket) socket.emit('cancel_session', { sessionId });
+            setTimeout(() => window.location.reload(), 100);
+          }}
           style={{
             position: 'absolute',
             bottom: 20,
