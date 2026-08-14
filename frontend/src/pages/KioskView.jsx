@@ -21,7 +21,6 @@ const KioskView = () => {
   const [jobId, setJobId] = useState(null);
   const [jobStatus, setJobStatus] = useState('');
   const [eta, setEta] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(null);
   const [sessionToken, setSessionToken] = useState(null);
 
   const authHeaders = () => sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
@@ -75,36 +74,7 @@ const KioskView = () => {
     };
   }, []);
 
-  // Dynamic Inactivity timer logic
-  useEffect(() => {
-    let interval;
-    if (step === 2) {
-      setTimeLeft(40); // 40 seconds to upload a file
-    } else if (step === 3) {
-      setTimeLeft(120); // 2 minutes to select settings and hit pay
-    } else if (step === 4) {
-      setTimeLeft(180); // 3 minutes to complete payment
-    } else if (step === 5 && (jobStatus === 'COMPLETED' || jobStatus === 'CANCELLED' || jobStatus === 'FAILED')) {
-      setTimeLeft(15); // 15 seconds to view success screen
-    } else {
-      setTimeLeft(null);
-    }
-
-    if (step > 1) {
-      interval = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev === null) return null;
-          if (prev <= 1) {
-            window.location.reload(); // Time's up, reset kiosk!
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-
-    return () => clearInterval(interval);
-  }, [step, jobStatus, fileData, settingsData, price, jobId]);
+  // Removed Inactivity timer logic as per request
 
   useEffect(() => {
     if (step === 5 && jobId) {
@@ -163,25 +133,30 @@ const KioskView = () => {
       
       {renderContent()}
 
-      {/* Auto-reset Timer Badge */}
-      {timeLeft !== null && step > 1 && (
-        <div style={{
-          position: 'absolute',
-          bottom: 20,
-          right: 20,
-          background: 'rgba(0,0,0,0.05)',
-          padding: '8px 16px',
-          borderRadius: 'var(--radius-full)',
-          fontSize: '0.875rem',
-          color: 'var(--text-muted)',
-          fontWeight: 600,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: timeLeft < 15 ? 'var(--error-500)' : 'var(--warning-500)' }} />
-          Session resets in {Math.floor(timeLeft / 60)}:{String(timeLeft % 60).padStart(2, '0')}
-        </div>
+      {/* Manual Start Over Button */}
+      {step > 1 && (
+        <button 
+          onClick={() => window.location.reload()}
+          style={{
+            position: 'absolute',
+            bottom: 20,
+            right: 20,
+            padding: '0.75rem 1.5rem',
+            background: 'white',
+            border: '2px solid var(--error-200)',
+            borderRadius: 'var(--radius-full)',
+            fontWeight: 600,
+            cursor: 'pointer',
+            color: 'var(--error-600)',
+            boxShadow: 'var(--shadow-md)',
+            transition: 'all 0.2s ease',
+            zIndex: 50
+          }}
+          onMouseOver={(e) => { e.currentTarget.style.background = 'var(--error-50)'; e.currentTarget.style.borderColor = 'var(--error-300)'; }}
+          onMouseOut={(e) => { e.currentTarget.style.background = 'white'; e.currentTarget.style.borderColor = 'var(--error-200)'; }}
+        >
+          Cancel / Start Over
+        </button>
       )}
     </div>
   );
