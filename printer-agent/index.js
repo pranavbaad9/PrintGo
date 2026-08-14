@@ -179,17 +179,17 @@ socket.on('physical_print_job', async (jobData) => {
       }
     }
     
-    console.log(`⚙️  Print options:`, JSON.stringify(printOptions));
-    
-    // Attempt printing
-    await ptp.print(localFilePath, printOptions);
-    console.log(`🖨️  SUCCESS: Job ${jobData.jobId} sent to Windows Print Spooler!`);
-    
-    // Notify backend that spooler accepted the job
-    socket.emit('print_spooler_success', { jobId: jobData.jobId });
-
-    // P3-001: True Print Verification via Spooler Polling
     if (PRINTER_NAME) {
+      console.log(`⚙️  Print options:`, JSON.stringify(printOptions));
+      
+      // Attempt printing
+      await ptp.print(localFilePath, printOptions);
+      console.log(`🖨️  SUCCESS: Job ${jobData.jobId} sent to Windows Print Spooler!`);
+      
+      // Notify backend that spooler accepted the job
+      socket.emit('print_spooler_success', { jobId: jobData.jobId });
+
+      // P3-001: True Print Verification via Spooler Polling
       console.log(`👀 Monitoring spooler queue for Job ${jobData.jobId}...`);
       let checkAttempts = 0;
       const maxAttempts = 120; // 2 minutes (120 * 1s)
@@ -231,7 +231,6 @@ socket.on('physical_print_job', async (jobData) => {
                 clearInterval(pollSpooler);
                 console.error(`❌ Physical Print Error for Job ${jobData.jobId}: ${status}`);
                 socket.emit('print_physical_error', { jobId: jobData.jobId, error: status });
-                // We should theoretically try to cancel the job in windows spooler to prevent it from printing later
                 exec(`powershell "Get-PrintJob -PrinterName '${PRINTER_NAME}' | Where-Object DocumentName -like '*${jobData.jobId}*' | Remove-PrintJob"`);
               }
             }
@@ -241,7 +240,9 @@ socket.on('physical_print_job', async (jobData) => {
         });
       }, 1000); // Check every second
     } else {
-      // If no printer name is set (testing mode), just simulate success
+      // Simulation mode bypass (No physical printer)
+      console.log(`⚠️  SIMULATION MODE: Bypassing physical print for job ${jobData.jobId}`);
+      socket.emit('print_spooler_success', { jobId: jobData.jobId });
       setTimeout(() => {
         socket.emit('print_physical_success', { jobId: jobData.jobId });
       }, 3000);
