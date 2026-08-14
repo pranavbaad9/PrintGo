@@ -52,7 +52,6 @@ const verifyPayment = async (req, res, next) => {
         }
         io.to('admins').emit('job_status_changed', updatedJob);
         
-        const { startPrintingProcess } = require('../../../services/queueService');
         if (startPrintingProcess) {
           startPrintingProcess(updatedJob.shortId, io);
         }
