@@ -30,7 +30,11 @@ const getJob = async (req, res, next) => {
 const createJob = async (req, res, next) => {
   try {
     // In actual implementation, we'd validate req.body with Zod here
-    const job = await jobsService.createJob(req.body);
+    const jobData = { ...req.body };
+    if (req.session && req.session.machineId) {
+      jobData.machineId = req.session.machineId;
+    }
+    const job = await jobsService.createJob(jobData);
     res.json({ success: true, job });
   } catch (error) {
     next(error);
