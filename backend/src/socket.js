@@ -171,8 +171,7 @@ const setupSockets = (io) => {
           include: { document: true }
         });
 
-        io.to(`machine_${socket.machineId}`).emit('job_status_changed', completedJob);
-        io.to('admins').emit('job_status_changed', completedJob);
+        // Emit status change is now handled universally by Prisma $extends
 
         // P1-002 / P2-001: Schedule document file deletion after 5 minutes (grace period)
         if (completedJob.document && completedJob.document.filename) {
@@ -197,8 +196,7 @@ const setupSockets = (io) => {
           include: { document: true }
         });
 
-        io.to(`machine_${socket.machineId}`).emit('job_status_changed', failedJob);
-        io.to('admins').emit('job_status_changed', failedJob);
+        // Emit status change is now handled universally by Prisma $extends
 
         // P1-003: Delete document file when job fails
         if (failedJob.document && failedJob.document.filename) {
@@ -235,8 +233,8 @@ const setupSockets = (io) => {
           data: { status: 'FAILED' },
           include: { document: true }
         });
-        io.to(`machine_${socket.machineId}`).emit('job_status_changed', failedJob);
-        io.to('admins').emit('job_status_changed', failedJob);
+        
+        // Emit status change is now handled universally by Prisma $extends
 
         // P1-003: Delete document file when job fails
         if (failedJob.document && failedJob.document.filename) {

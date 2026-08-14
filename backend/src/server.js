@@ -38,6 +38,7 @@ const io = new Server(server, {
   }
 });
 app.set('io', io);
+global.io = io;
 setupSockets(io);
 
 // Security & Middlewares

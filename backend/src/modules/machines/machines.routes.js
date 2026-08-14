@@ -10,5 +10,6 @@ router.post('/', protect, restrictTo('SUPERADMIN'), validate(createMachineSchema
 router.put('/:id', protect, restrictTo('SUPERADMIN'), validate(updateMachineSchema), machinesController.updateMachine);
 
 router.get('/my-machines', protect, restrictTo('FRANCHISEE', 'STAFF'), machinesController.getMyMachines);
+router.get('/agent-version', machinesController.getAgentVersion); // Public endpoint for OTA updater
 
 module.exports = router;

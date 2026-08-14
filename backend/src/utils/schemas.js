@@ -3,18 +3,18 @@ const { z } = require('zod');
 // Auth Schemas
 const loginSchema = z.object({
   body: z.object({
-    email: z.string().min(1),
+    email: z.string().email(),
     password: z.string().min(6),
-  }).strip(),
+  }).strict(),
   query: z.any(),
   params: z.any(),
 });
 
 const sessionSchema = z.object({
   body: z.object({
-    sessionId: z.string().min(1),
-    machineId: z.string().optional(),
-  }).strip(),
+    sessionId: z.string().min(1).optional(),
+    machineId: z.string().uuid().optional(),
+  }).strict(),
   query: z.any(),
   params: z.any(),
 });
@@ -26,18 +26,26 @@ const createJobSchema = z.object({
       originalName: z.string(),
       filename: z.string(),
       mimetype: z.string(),
-      size: z.number(),
-      pages: z.number().optional(),
+      size: z.number().int().positive(),
+      pages: z.number().int().positive().optional(),
     }),
     settings: z.object({
       color: z.enum(['bw', 'color']).default('bw'),
       duplex: z.enum(['single', 'double']).default('single'),
-      copies: z.number().int().min(1).default(1),
+      copies: z.number().int().min(1).max(100).default(1),
       pageRangeType: z.enum(['all', 'custom']).default('all'),
-      customRange: z.string().optional(),
+      customRange: z.string().nullable().optional(),
       pagesToPrint: z.number().int().min(1).default(1),
+    }).refine(data => {
+      if (data.pageRangeType === 'custom') {
+        return !!data.customRange && /^[0-9,-]+$/.test(data.customRange);
+      }
+      return true;
+    }, {
+      message: "Invalid custom range format",
+      path: ["customRange"],
     }),
-  }).strip(),
+  }).strict(),
   query: z.any(),
   params: z.any(),
 });

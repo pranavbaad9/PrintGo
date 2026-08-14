@@ -40,10 +40,7 @@ const processJob = async (shortId) => {
       
       if (globalIo) {
         // Emit status change to machine room + admins only
-        if (updatedJob.machineId) {
-          globalIo.to(`machine_${updatedJob.machineId}`).emit('job_status_changed', updatedJob);
-        }
-        globalIo.to('admins').emit('job_status_changed', updatedJob);
+        // Emit status change is now handled universally by Prisma $extends
         
         const printData = {
           jobId: updatedJob.shortId,

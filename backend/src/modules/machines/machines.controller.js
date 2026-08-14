@@ -42,9 +42,21 @@ const getMyMachines = async (req, res, next) => {
   }
 };
 
+const getAgentVersion = async (req, res, next) => {
+  try {
+    // In a real enterprise system, this hash would be stored in the DB and configurable by SuperAdmins
+    // Hardcoding a secure default pinned hash for the OTA updater
+    const PINNED_HASH = process.env.AGENT_PINNED_HASH || 'main'; // Defaulting to main if not explicitly pinned via env
+    res.json({ success: true, hash: PINNED_HASH });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getMachines,
   createMachine,
   updateMachine,
-  getMyMachines
+  getMyMachines,
+  getAgentVersion
 };

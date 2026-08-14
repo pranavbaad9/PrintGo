@@ -46,14 +46,8 @@ const verifyPayment = async (req, res, next) => {
     if (updatedJob) {
       // P4-002: Fallback trigger if Webhook hasn't arrived yet
       if (updatedJob.status === 'WAITING' && wasJustUpdated) {
-        const io = req.app.get('io');
-        if (updatedJob.machineId) {
-          io.to(`machine_${updatedJob.machineId}`).emit('job_status_changed', updatedJob);
-        }
-        io.to('admins').emit('job_status_changed', updatedJob);
-        
         if (startPrintingProcess) {
-          startPrintingProcess(updatedJob.shortId, io);
+          startPrintingProcess(updatedJob.shortId, req.app.get('io'));
         }
       }
       return res.json({ success: true, job: updatedJob });
@@ -103,12 +97,7 @@ const cashfreeWebhook = async (req, res, next) => {
       if (updatedJob) {
         logger.info(`Payment verified for job ${updatedJob.shortId}, wasJustUpdated: ${wasJustUpdated}`);
         
-        // Emit status change to relevant clients (machine room + admins, not all sockets)
-        const io = req.app.get('io');
-        if (updatedJob.machineId) {
-          io.to(`machine_${updatedJob.machineId}`).emit('job_status_changed', updatedJob);
-        }
-        io.to('admins').emit('job_status_changed', updatedJob);
+        // Emit status change is now handled universally by Prisma $extends
         
         // ⚡ THIS IS THE SINGLE SOURCE OF TRUTH FOR TRIGGERING PRINTING
         // Only trigger if we were the thread that actually updated the state

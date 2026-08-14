@@ -136,6 +136,12 @@ const checkPrinterStatus = () => {
 };
 
 socket.on('physical_print_job', async (jobData) => {
+  // Command Injection Prevention (P0)
+  if (!jobData.jobId || !/^[a-zA-Z0-9_-]+$/.test(jobData.jobId)) {
+    console.error(`❌ REJECTED Job: Invalid jobId format (potential injection): ${jobData.jobId}`);
+    return;
+  }
+
   console.log(`\n======================================================`);
   console.log(`📥 NEW PRINT JOB RECEIVED! [Job ID: ${jobData.jobId}]`);
   console.log(`📄 Document: ${jobData.originalName}`);
@@ -201,6 +207,7 @@ socket.on('physical_print_job', async (jobData) => {
       // P3-001: True Print Verification via Spooler Polling
       console.log(`👀 Monitoring spooler queue for Job ${jobData.jobId}...`);
       let checkAttempts = 0;
+      let wasSeenInQueue = false; // Prevents false-positive success before job reaches spooler
       const maxAttempts = 120; // 2 minutes (120 * 1s)
       
       const pollSpooler = setInterval(() => {
@@ -214,11 +221,14 @@ socket.on('physical_print_job', async (jobData) => {
         exec(`powershell "Get-PrintJob -PrinterName '${PRINTER_NAME}' | Select-Object DocumentName, JobStatus | ConvertTo-Json"`, (error, stdout) => {
           if (error) return; // ignore errors and retry
           if (!stdout || stdout.trim() === '') {
-            // No jobs in queue! This means our job finished printing successfully and was cleared.
-            clearInterval(pollSpooler);
-            console.log(`✅ Job ${jobData.jobId} physically completed (cleared from spooler)!`);
-            socket.emit('print_physical_success', { jobId: jobData.jobId });
-            if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
+            // No jobs in queue!
+            if (wasSeenInQueue) {
+              // It was there, now it's gone -> success!
+              clearInterval(pollSpooler);
+              console.log(`✅ Job ${jobData.jobId} physically completed (cleared from spooler)!`);
+              socket.emit('print_physical_success', { jobId: jobData.jobId });
+              if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
+            }
             return;
           }
 
@@ -229,13 +239,8 @@ socket.on('physical_print_job', async (jobData) => {
             // Find our job (document name usually contains the filename we sent)
             const ourJob = jobs.find(j => j.DocumentName && j.DocumentName.includes(jobData.jobId));
             
-            if (!ourJob) {
-              // Our job is no longer in the queue. Success!
-              clearInterval(pollSpooler);
-              console.log(`✅ Job ${jobData.jobId} physically completed (cleared from spooler)!`);
-              socket.emit('print_physical_success', { jobId: jobData.jobId });
-              if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
-            } else {
+            if (ourJob) {
+              wasSeenInQueue = true; // We successfully observed it in the spooler!
               // Check for errors
               const status = ourJob.JobStatus || '';
               if (status.includes('Error') || status.includes('PaperOut') || status.includes('PaperJam') || status.includes('Blocked')) {
@@ -245,9 +250,16 @@ socket.on('physical_print_job', async (jobData) => {
                 exec(`powershell "Get-PrintJob -PrinterName '${PRINTER_NAME}' | Where-Object DocumentName -like '*${jobData.jobId}*' | Remove-PrintJob"`);
                 if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
               }
+            } else if (wasSeenInQueue) {
+              // Our job is no longer in the queue but it WAS seen. Success!
+              clearInterval(pollSpooler);
+              console.log(`✅ Job ${jobData.jobId} physically completed (cleared from spooler)!`);
+              socket.emit('print_physical_success', { jobId: jobData.jobId });
+              if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
             }
           } catch (e) {
             // JSON parse error, ignore and retry next second
+          }
           }
         });
       }, 1000); // Check every second
