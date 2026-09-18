@@ -16,7 +16,7 @@ const serveDocument = async (req, res, next) => {
     const document = await prisma.document.findFirst({
       where: { filename: { endsWith: filename } },
       include: {
-        printJob: {
+        printJobs: {
           include: {
             machine: true
           }
@@ -33,8 +33,8 @@ const serveDocument = async (req, res, next) => {
 
     if (req.machine) {
       // Requested by a Printer Agent (Machine)
-      if (document.printJob && document.printJob.length > 0) {
-        isAuthorized = document.printJob.some(job => job.machineId === req.machine.id);
+      if (document.printJobs && document.printJobs.length > 0) {
+        isAuthorized = document.printJobs.some(job => job.machineId === req.machine.id);
       }
     } else if (req.session) {
       // Security: Mobile sessions DO NOT need to download the physical file again.
@@ -47,8 +47,8 @@ const serveDocument = async (req, res, next) => {
         isAuthorized = true;
       } else {
         // Normal admin can only view files for their company's machines
-        if (document.printJob && document.printJob.length > 0) {
-          isAuthorized = document.printJob.some(job => job.machine && job.machine.companyId === req.user.companyId);
+        if (document.printJobs && document.printJobs.length > 0) {
+          isAuthorized = document.printJobs.some(job => job.machine && job.machine.companyId === req.user.companyId);
         }
       }
     }
@@ -57,7 +57,7 @@ const serveDocument = async (req, res, next) => {
       return next(new AppError('Access denied: You do not have permission to view this file', 403));
     }
 
-    const uploadsDir = path.join(__dirname, '../../../../uploads');
+    const uploadsDir = path.join(__dirname, '../../../uploads');
     const filePath = path.join(uploadsDir, filename);
 
     if (!fs.existsSync(filePath)) {

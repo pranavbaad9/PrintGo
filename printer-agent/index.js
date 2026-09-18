@@ -30,8 +30,8 @@ if (!MACHINE_KEY) {
   process.exit(1);
 }
 
-if (PRINTER_NAME && !/^[a-zA-Z0-9_\-\s]+$/.test(PRINTER_NAME)) {
-  console.error('🔥 FATAL ERROR: PRINTER_NAME contains invalid characters. Only alphanumeric, space, underscore, and dash are allowed.');
+if (PRINTER_NAME && !/^[a-zA-Z0-9_\-\s\(\)\.]+$/.test(PRINTER_NAME)) {
+  console.error('🔥 FATAL ERROR: PRINTER_NAME contains invalid characters. Only alphanumeric, space, underscore, dash, and parentheses are allowed.');
   process.exit(1);
 }
 
