@@ -12,7 +12,6 @@ const crypto = require('crypto');
 const forge = require('node-forge');
 const pdfParse = require('pdf-parse');
 const SpoolerMonitor = require('./src/spooler');
-const { scanAndCreatePDF } = require('./src/scanner');
 
 process.on('uncaughtException', (err) => {
   console.error('🔥 CRITICAL ERROR: Uncaught Exception:', err);
@@ -243,39 +242,6 @@ socket.on('physical_print_job', async (jobData) => {
     console.error(`❌ ERROR processing Job ${jobData.jobId}:`, error.message);
     socket.emit('print_spooler_error', { jobId: jobData.jobId, error: error.message });
     if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
-  }
-});
-
-socket.on('start_adf_scan', async ({ sessionId }) => {
-  console.log(`\n======================================================`);
-  console.log(`📥 NEW COPY SCAN REQUESTED! [Session ID: ${sessionId}]`);
-  console.log(`======================================================`);
-
-  try {
-    const scanId = crypto.randomBytes(8).toString('hex');
-    const result = await scanAndCreatePDF(scanId);
-    
-    console.log(`✅ Document scanned successfully (${result.pages} pages). Uploading to backend...`);
-    
-    const FormData = require('form-data');
-    const form = new FormData();
-    form.append('file', fs.createReadStream(result.pdfPath));
-    form.append('sessionId', sessionId);
-    
-    await axios.post(`${BACKEND_URL}/api/upload`, form, {
-      headers: {
-        ...form.getHeaders(),
-        'x-machine-key': MACHINE_KEY
-      }
-    });
-    
-    console.log(`✅ Upload complete for session ${sessionId}. Cloud will handle payment and printing.`);
-    
-    // Clean up local temp file
-    fs.unlinkSync(result.pdfPath);
-  } catch (error) {
-    console.error(`❌ ERROR during ADF Scan:`, error.message);
-    // You could emit an error back to the session if desired
   }
 });
 

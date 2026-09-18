@@ -28,25 +28,15 @@ const handleUpload = async (req, res, next) => {
       pages = await uploadService.getPageCount(fileUrl, req.file.mimetype, isEncrypted, claimedPages);
     }
 
-    const fileData = {
-      filename: fileUrl,
-      originalName: req.file.originalname,
-      size: req.file.size,
-      mimetype: req.file.mimetype,
-      pages: pages 
-    };
-
-    // If uploaded by Kiosk Agent for a specific session (ADF Copy Flow)
-    if (req.body.sessionId) {
-      const io = req.app.get('io');
-      if (io) {
-        io.to(req.body.sessionId).emit('scan_completed', fileData);
-      }
-    }
-
     res.json({
       success: true,
-      file: fileData
+      file: {
+        filename: fileUrl,
+        originalName: req.file.originalname,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+        pages: pages 
+      }
     });
   } catch (error) {
     next(error);

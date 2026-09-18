@@ -210,7 +210,6 @@ model PrintJob {
   shortId       String        @unique // Kiosk code (8 chars)
   status String @default("PENDING_PAYMENT")
   cost          Float
-  isCopyJob     Boolean       @default(false)
   
   machineId     String?
   machine       Machine?      @relation(fields: [machineId], references: [id], onDelete: SetNull)

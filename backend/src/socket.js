@@ -101,16 +101,6 @@ const setupSockets = (io) => {
       io.to(sessionId).emit('kiosk_user_connected');
     });
 
-    socket.on('request_physical_scan', ({ sessionId }) => {
-      if (!validateSessionOwnership(socket, sessionId)) return;
-      if (socket.machineId) {
-        logger.info(`Session ${sessionId} requested ADF scan on machine ${socket.machineId}`);
-        io.to(`machine_${socket.machineId}`).emit('start_adf_scan', { sessionId });
-      } else {
-        logger.warn(`Session ${sessionId} requested scan, but no machine is attached to session`);
-      }
-    });
-
     socket.on('file_uploaded', ({ sessionId, fileData }) => {
       if (!validateSessionOwnership(socket, sessionId)) return;
       io.to(sessionId).emit('kiosk_file_uploaded', fileData);

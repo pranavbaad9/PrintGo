@@ -24,7 +24,6 @@ const MobileView = () => {
   const [error, setError] = useState('');
   const [price, setPrice] = useState(0);
   const [sessionToken, setSessionToken] = useState(null);
-  const [jobType, setJobType] = useState('print'); // 'print' or 'copy'
   
   // E2E Encryption State
   const [publicKey, setPublicKey] = useState(null);
@@ -89,12 +88,6 @@ const MobileView = () => {
           newSocket.on('job_status_changed', (job) => {
             if (['WAITING', 'PRINTING', 'COMPLETED'].includes(job.status) && step !== 4) setStep(4);
           });
-          newSocket.on('scan_completed', (data) => {
-            setFileData(data);
-            setJobType('print');
-            setUploading(false);
-            setStep(2);
-          });
         }
       } catch (err) {
         console.error('Failed to join session:', err);
@@ -148,7 +141,7 @@ const MobileView = () => {
       return count > 0 ? count : totalPages;
     };
 
-    const totalPages = fileData?.pages || 1;
+    const totalPages = fileData.pages || 1;
     const pagesToPrint = settings.pageRangeType === 'custom'
       ? calculateCustomPages(settings.customRange, totalPages)
       : totalPages;
@@ -168,7 +161,7 @@ const MobileView = () => {
 
     if (socket)
       socket.emit('settings_updated', { sessionId, settingsData: { ...settings, pagesToPrint }, price: calc });
-  }, [settings.color, settings.duplex, settings.copies, settings.pageRangeType, settings.customRange, fileData, socket, jobType]);
+  }, [settings.color, settings.duplex, settings.copies, settings.pageRangeType, settings.customRange, fileData, socket]);
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -257,11 +250,6 @@ const MobileView = () => {
     }
   };
 
-  const initiatePhysicalScan = () => {
-    setUploading(true);
-    socket.emit('request_physical_scan', { sessionId });
-  };
-
   const handleSettingsChange = (e) => {
     const { name, value, type, checked } = e.target;
     setSettings(prev => ({
@@ -273,16 +261,13 @@ const MobileView = () => {
   const handlePrintSettingsSubmit = async () => {
     setIsSubmittingSettings(true);
     try {
-      let endpoint = `${API_URL}/api/jobs`;
-      const payload = { settings };
-      
-      payload.file = fileData;
+      const payload = { file: fileData, settings };
       if (encryptedKey && iv) {
         payload.encryptedKey = encryptedKey;
         payload.iv = iv;
       }
       
-      const res = await axios.post(endpoint, payload, { timeout: 15000, headers: authHeaders() });
+      const res = await axios.post(`${API_URL}/api/jobs`, payload, { timeout: 15000, headers: authHeaders() });
       if (res.data.success) {
         setJobId(res.data.job.shortId);
         // Use the server-calculated cost as the authoritative price
@@ -364,34 +349,19 @@ const MobileView = () => {
     switch (step) {
       case 1:
         return (
-          <div className="animate-fade-in mt-4 flex flex-col gap-4">
-            <Card glass className="text-center cursor-pointer hover:shadow-lg transition-all" onClick={() => { setJobType('print'); document.getElementById('file-upload').click(); }}>
-              <div style={{ display: 'inline-flex', background: 'var(--primary-50)', borderRadius: '50%', padding: '1rem', marginBottom: '1rem' }}>
-                <Upload size={32} style={{ color: 'var(--primary-color)' }} />
-              </div>
-              <h2 className="text-2xl font-bold mb-2">Print a Document</h2>
-              <p className="text-muted mb-4">Upload from your phone</p>
-              {uploading ? (
-                <div className="text-main font-semibold"><Loader size={18} className="animate-spin inline mr-2" /> Uploading...</div>
-              ) : (
-                <div className="btn btn-primary w-full inline-block">Choose File</div>
-              )}
-              <input id="file-upload" type="file" style={{ display: 'none' }} onChange={handleFileUpload} disabled={uploading} />
-            </Card>
-            
-            <Card glass className="text-center cursor-pointer hover:shadow-lg transition-all" onClick={uploading ? undefined : initiatePhysicalScan}>
-              <div style={{ display: 'inline-flex', background: 'var(--success-50)', borderRadius: '50%', padding: '1rem', marginBottom: '1rem' }}>
-                <Settings size={32} style={{ color: 'var(--success-500)' }} />
-              </div>
-              <h2 className="text-2xl font-bold mb-2">Make Physical Copies</h2>
-              <p className="text-muted mb-4">Scan using Kiosk ADF</p>
-              {uploading ? (
-                <div className="text-main font-semibold"><Loader size={18} className="animate-spin inline mr-2" /> Scanning Pages...</div>
-              ) : (
-                <div className="btn w-full inline-block" style={{ background: 'var(--success-500)', color: 'white' }}>Start Scanning</div>
-              )}
-            </Card>
-          </div>
+          <Card glass className="text-center animate-fade-in mt-4">
+            <div style={{ display: 'inline-flex', background: 'var(--primary-50)', borderRadius: '50%', padding: '1rem', marginBottom: '1rem' }}>
+              <Upload size={32} style={{ color: 'var(--primary-color)' }} />
+            </div>
+            <h2 className="text-2xl font-bold mb-2">Upload Document</h2>
+            <p className="text-muted mb-6">Select a file from your phone to print</p>
+
+            <label className="btn btn-primary w-full" style={{ display: 'flex', cursor: 'pointer', padding: '0.875rem', fontSize: '1rem' }}>
+              {uploading ? <><Loader size={18} className="animate-spin" /> Uploading...</> : 'Choose File'}
+              <input type="file" style={{ display: 'none' }} onChange={handleFileUpload} disabled={uploading} />
+            </label>
+            <p className="text-xs text-muted mt-3">Supports PDF, DOCX, PPTX, JPG, PNG</p>
+          </Card>
         );
       case 2:
         return (
@@ -435,8 +405,6 @@ const MobileView = () => {
                 <input type="text" name="customRange" placeholder="e.g. 1-3, 5" className="form-input" value={settings.customRange} onChange={handleSettingsChange} />
               )}
             </div>
-
-
 
             <div className="price-card mt-2">
               <p className="text-sm opacity-80 mb-1">Total</p>

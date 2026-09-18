@@ -95,35 +95,9 @@ const updateJobStatus = async (shortId, status, user = null) => {
   return job;
 };
 
-const createCopyJob = async (jobData) => {
-  const { settings, machineId } = jobData;
-
-  const { calculatePrice } = require('../../services/pricing.service');
-  // Pass 1 page as a base for copying, user pays per physical page
-  const { cost, pagesToPrint } = calculatePrice(settings, { pages: settings.copies });
-
-  const newJob = await prisma.printJob.create({
-    data: {
-      shortId: generateShortId(),
-      machineId: machineId || null,
-      cost,
-      color: settings.color,
-      duplex: settings.duplex,
-      copies: settings.copies,
-      pagesToPrint,
-      isCopyJob: true,
-      status: 'PENDING_PAYMENT'
-    }
-  });
-
-  logger.info(`Copy Job created with shortId ${newJob.shortId}, cost: ₹${cost}`);
-  return newJob;
-};
-
 module.exports = {
   getAllJobs,
   getJobByShortId,
   createJob,
-  createCopyJob,
   updateJobStatus
 };
