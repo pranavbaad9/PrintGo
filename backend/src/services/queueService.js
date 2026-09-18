@@ -9,16 +9,16 @@ let useRedis = !!process.env.REDIS_HOST; // Use Redis if configured
 try {
   if (useRedis) {
     printQueue = new Queue('printQueue', { connection });
-  } else if (process.env.NODE_ENV === 'production') {
-    throw new Error('REDIS_HOST must be configured in production');
+  } else {
+    throw new Error('REDIS_HOST not configured');
   }
 } catch(e) {
   if (process.env.NODE_ENV === 'production') {
-    console.error("🔥 FATAL ERROR: BullMQ requires Redis in production for reliable scaling.");
-    process.exit(1);
+    console.warn("⚠️ WARNING: BullMQ requires Redis in production for reliable scaling. Falling back to in-memory queue (not recommended for multi-instance deployments).");
+  } else {
+    console.warn("BullMQ initialization failed, using in-memory queue fallback.");
   }
   useRedis = false;
-  console.warn("BullMQ initialization failed, using in-memory queue fallback.");
 }
 
 let globalIo = null;
