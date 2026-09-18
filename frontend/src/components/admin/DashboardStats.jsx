@@ -9,9 +9,8 @@ export const DashboardStats = ({ jobs, machines }) => {
 
   const completedJobs = jobs.filter(j => j.status === 'COMPLETED').length;
   
-  // Use real data from first machine if available, else fallback to mock calculation
-  let paperLeft = Math.max(0, 500 - jobs.reduce((sum, j) => sum + (j.pagesToPrint * j.copies || 0), 0));
-  let inkLevel = Math.max(0, 100 - (jobs.length * 2));
+  let paperLeft = 0;
+  let inkLevel = 0;
 
   if (machines && machines.length > 0) {
     const latestStatus = machines[0]?.printerStatuses?.[0];

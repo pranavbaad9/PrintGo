@@ -53,10 +53,28 @@ const getAgentVersion = async (req, res, next) => {
   }
 };
 
+const getPublicKey = async (req, res, next) => {
+  try {
+    const { PrismaClient } = require('@prisma/client');
+    const prisma = new PrismaClient();
+    const machine = await prisma.machine.findUnique({
+      where: { id: req.params.id },
+      select: { publicKey: true }
+    });
+    if (!machine || !machine.publicKey) {
+      return res.status(404).json({ success: false, error: 'Public key not available for this machine' });
+    }
+    res.json({ success: true, publicKey: machine.publicKey });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getMachines,
   createMachine,
   updateMachine,
   getMyMachines,
-  getAgentVersion
+  getAgentVersion,
+  getPublicKey
 };

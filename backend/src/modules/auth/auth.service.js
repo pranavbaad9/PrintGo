@@ -20,20 +20,6 @@ const login = async (email, password) => {
   });
 
   if (!user) {
-    // For setup purposes, create a SUPERADMIN if it's the default credentials
-    if (email === process.env.ADMIN_USER && password === process.env.ADMIN_PASS) {
-      const hashedPassword = await bcrypt.hash(password, 12);
-      const newUser = await prisma.user.create({
-        data: {
-          email,
-          password: hashedPassword,
-          name: 'Super Admin',
-          role: 'SUPERADMIN'
-        }
-      });
-      const token = signToken(newUser.id);
-      return { user: newUser, token };
-    }
     throw new AppError('Incorrect email or password', 401);
   }
 

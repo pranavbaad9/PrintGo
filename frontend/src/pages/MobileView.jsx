@@ -6,6 +6,8 @@ import { Upload, Settings, CheckCircle, Loader, CreditCard, WifiOff } from 'luci
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { StepIndicator } from '../components/mobile/StepIndicator';
+import { PDFDocument } from 'pdf-lib';
+import forge from 'node-forge';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://printgo-ssoi.onrender.com';
 
@@ -22,6 +24,11 @@ const MobileView = () => {
   const [error, setError] = useState('');
   const [price, setPrice] = useState(0);
   const [sessionToken, setSessionToken] = useState(null);
+  
+  // E2E Encryption State
+  const [publicKey, setPublicKey] = useState(null);
+  const [encryptedKey, setEncryptedKey] = useState(null);
+  const [iv, setIv] = useState(null);
 
   // Helper: returns auth headers for API requests
   const authHeaders = () => sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
@@ -62,6 +69,15 @@ const MobileView = () => {
             newSocket.emit('join_session', sessionId);
             newSocket.emit('mobile_connected', sessionId);
           });
+          
+          // Fetch the Kiosk's public key for E2E Encryption
+          if (res.data.machineId) {
+            axios.get(`${API_URL}/api/machines/${res.data.machineId}/public-key`)
+              .then(pkRes => {
+                if (pkRes.data.success) setPublicKey(pkRes.data.publicKey);
+              })
+              .catch(err => console.error('Failed to fetch Kiosk public key:', err));
+          }
           newSocket.on('disconnect', () => setIsConnected(false));
 
           newSocket.on('kiosk_payment_success', ({ jobId: j }) => { setJobId(j); setStep(4); });
@@ -156,20 +172,74 @@ const MobileView = () => {
     }
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-
+    
     try {
+      let payloadToUpload = file;
+      let claimedPages = 1;
+      let isEncrypted = false;
+      
+      // E2E Encryption Flow
+      if (publicKey && file.type === 'application/pdf') {
+        console.log('Initiating true E2E Encryption...');
+        
+        // 1. Read file locally
+        const arrayBuffer = await file.arrayBuffer();
+        
+        // 2. Extract page count locally
+        const pdfDoc = await PDFDocument.load(arrayBuffer);
+        claimedPages = pdfDoc.getPageCount();
+        console.log(`Local page count: ${claimedPages}`);
+        
+        // 3. Generate AES-GCM Key & IV
+        const rawKey = window.crypto.getRandomValues(new Uint8Array(32)); // 256-bit
+        const rawIv = window.crypto.getRandomValues(new Uint8Array(12)); // 96-bit
+        
+        const cryptoKey = await window.crypto.subtle.importKey(
+          'raw', rawKey, { name: 'AES-GCM' }, false, ['encrypt']
+        );
+        
+        // 4. Encrypt File
+        const encryptedBuffer = await window.crypto.subtle.encrypt(
+          { name: 'AES-GCM', iv: rawIv },
+          cryptoKey,
+          arrayBuffer
+        );
+        
+        // Convert to Blob
+        payloadToUpload = new Blob([encryptedBuffer], { type: 'application/octet-stream' });
+        
+        // 5. Encrypt AES Key with Kiosk RSA Public Key
+        const forgePublicKey = forge.pki.publicKeyFromPem(publicKey);
+        const encryptedRawKey = forgePublicKey.encrypt(
+          forge.util.createBuffer(rawKey).getBytes(), 
+          'RSA-OAEP', 
+          { md: forge.md.sha256.create(), mgf1: { md: forge.md.sha1.create() } }
+        );
+        
+        setEncryptedKey(forge.util.encode64(encryptedRawKey));
+        setIv(forge.util.encode64(forge.util.createBuffer(rawIv).getBytes()));
+        isEncrypted = true;
+      }
+      
+      const formData = new FormData();
+      formData.append('file', payloadToUpload, file.name);
+      formData.append('isEncrypted', isEncrypted);
+      formData.append('claimedPages', claimedPages);
+
       const response = await axios.post(`${API_URL}/api/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data', ...authHeaders() }
       });
+      
       if (response.data.success) {
         const data = response.data.file;
+        // Ensure local page count overrides backend's fallback
+        data.pages = isEncrypted ? claimedPages : data.pages; 
         setFileData(data);
         socket.emit('file_uploaded', { sessionId, fileData: data });
         setStep(2);
       }
     } catch (err) {
+      console.error(err);
       if (err.code === 'ECONNABORTED' || (err.message && err.message.includes('timeout'))) {
         showError('Server is waking up, please try again in a few seconds.');
       } else {
@@ -191,7 +261,13 @@ const MobileView = () => {
   const handlePrintSettingsSubmit = async () => {
     setIsSubmittingSettings(true);
     try {
-      const res = await axios.post(`${API_URL}/api/jobs`, { file: fileData, settings }, { timeout: 15000, headers: authHeaders() });
+      const payload = { file: fileData, settings };
+      if (encryptedKey && iv) {
+        payload.encryptedKey = encryptedKey;
+        payload.iv = iv;
+      }
+      
+      const res = await axios.post(`${API_URL}/api/jobs`, payload, { timeout: 15000, headers: authHeaders() });
       if (res.data.success) {
         setJobId(res.data.job.shortId);
         // Use the server-calculated cost as the authoritative price

@@ -9,36 +9,30 @@ export default function Dashboard() {
     totalUsers: 0,
     totalRevenue: 0,
   });
+  const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // In a real scenario, you'd need to log in first and get the token.
-    // For now, we simulate fetching stats.
-    const fetchStats = async () => {
+    const fetchData = async () => {
       try {
         setLoading(true);
-        // Note: This endpoint is protected by SUPERADMIN role. 
-        // We will mock the data if the server returns 401/403 for demonstration.
-        const response = await api.get('/admin/stats');
-        setStats(response.data.data);
+        const [statsRes, jobsRes] = await Promise.all([
+          api.get('/admin/stats'),
+          api.get('/jobs')
+        ]);
+        setStats(statsRes.data.data);
+        setJobs(jobsRes.data.jobs || []);
         setError(null);
       } catch (err) {
-        console.warn('Authentication required or server offline. Using mock data for preview.');
-        // Fallback mock data so the UI looks complete even before auth is fully wired up on the client side
-        setStats({
-          totalCompanies: 14,
-          totalMachines: 87,
-          totalUsers: 142,
-          totalRevenue: 125400,
-        });
-        setError('Using mock data - Please login as Super Admin.');
+        console.error('Error fetching dashboard data:', err);
+        setError('Failed to fetch data - Please login as Super Admin.');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchStats();
+    fetchData();
   }, []);
 
   return (
@@ -99,41 +93,44 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {/* Note: This should ideally map over real fetched jobs */}
-              <tr>
-                <td>Job_882A9C</td>
-                <td><span className="badge danger">FAILED (Paper Jam)</span></td>
-                <td>₹10.00</td>
-                <td>
-                  <button 
-                    onClick={async () => {
-                      if(window.confirm('Process instant Cashfree refund for ₹10?')) {
-                        try {
-                          await api.post('/payments/refund/882A9C');
-                          alert('Refund successful!');
-                        } catch(e) {
-                          alert('Error: ' + (e.response?.data?.message || e.message));
-                        }
-                      }
-                    }}
-                    style={{ background: '#ef4444', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-                  >
-                    Refund Customer
-                  </button>
-                </td>
-              </tr>
-              <tr>
-                <td>Job_114B7D</td>
-                <td><span className="badge success">COMPLETED</span></td>
-                <td>₹40.00</td>
-                <td>-</td>
-              </tr>
-              <tr>
-                <td>Job_993X1A</td>
-                <td><span className="badge" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>REFUNDED</span></td>
-                <td>₹15.00</td>
-                <td>-</td>
-              </tr>
+              {jobs.slice(0, 10).map((job) => (
+                <tr key={job.id}>
+                  <td>{job.shortId}</td>
+                  <td>
+                    <span className={`badge ${job.status === 'FAILED' ? 'danger' : job.status === 'COMPLETED' ? 'success' : ''}`} 
+                          style={job.status === 'REFUNDED' ? { background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' } : {}}>
+                      {job.status}
+                    </span>
+                  </td>
+                  <td>₹{job.cost.toFixed(2)}</td>
+                  <td>
+                    {job.status === 'FAILED' && (
+                      <button 
+                        onClick={async () => {
+                          if(window.confirm(`Process instant Cashfree refund for ₹${job.cost}?`)) {
+                            try {
+                              await api.post(`/payments/refund/${job.shortId}`);
+                              alert('Refund successful!');
+                              setJobs(jobs.map(j => j.id === job.id ? { ...j, status: 'REFUNDED' } : j));
+                            } catch(e) {
+                              alert('Error: ' + (e.response?.data?.message || e.message));
+                            }
+                          }
+                        }}
+                        style={{ background: '#ef4444', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+                      >
+                        Refund Customer
+                      </button>
+                    )}
+                    {job.status !== 'FAILED' && '-'}
+                  </td>
+                </tr>
+              ))}
+              {jobs.length === 0 && (
+                <tr>
+                  <td colSpan="4" style={{ textAlign: 'center', padding: '1rem' }}>No recent jobs</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

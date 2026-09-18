@@ -5,7 +5,7 @@ const AppError = require('../../utils/AppError');
 
 const serveDocument = async (req, res, next) => {
   try {
-    const { filename } = req.params;
+    const filename = path.basename(req.params.filename || '');
     if (!filename) {
       return next(new AppError('Filename is required', 400));
     }
@@ -37,16 +37,10 @@ const serveDocument = async (req, res, next) => {
         isAuthorized = document.printJob.some(job => job.machineId === req.machine.id);
       }
     } else if (req.session) {
-      // Requested by a Kiosk/Mobile Session
-      if (document.printJob && document.printJob.length > 0) {
-        isAuthorized = document.printJob.some(job => job.machineId === req.session.machineId || job.machineId === null);
-      } else {
-        // If the document has no jobs yet (just uploaded), we will permit access.
-        // It's a temporary state and the document will be linked to a job soon.
-        if (document.printJob.length === 0) {
-          isAuthorized = true;
-        }
-      }
+      // Security: Mobile sessions DO NOT need to download the physical file again.
+      // Blocking session downloads physically prevents any possibility of BOLA/IDOR on files.
+      // Only the authenticated Printer Agent (req.machine) or Admin (req.user) can download.
+      isAuthorized = false;
     } else if (req.user) {
       // Requested by an Admin User
       if (req.user.role === 'SUPERADMIN') {

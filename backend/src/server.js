@@ -28,6 +28,9 @@ if (process.env.SENTRY_DSN) {
   });
 }
 
+const { createAdapter } = require('@socket.io/redis-adapter');
+const { connection } = require('./services/redisClient');
+
 // Server & Socket.IO Setup
 const server = http.createServer(app);
 const io = new Server(server, {
@@ -37,6 +40,14 @@ const io = new Server(server, {
     credentials: true
   }
 });
+
+if (connection) {
+  const pubClient = connection;
+  const subClient = pubClient.duplicate();
+  io.adapter(createAdapter(pubClient, subClient));
+  logger.info('Redis adapter attached to Socket.io');
+}
+
 app.set('io', io);
 global.io = io;
 setupSockets(io);
@@ -57,10 +68,10 @@ const apiLimiter = rateLimit({
 app.use('/api/', apiLimiter);
 
 app.use(express.json({
-  limit: '1000mb',
+  limit: '2mb',
   verify: (req, res, buf) => { req.rawBody = buf.toString(); }
 }));
-app.use(express.urlencoded({ limit: '1000mb', extended: true }));
+app.use(express.urlencoded({ limit: '2mb', extended: true }));
 app.use(cookieParser());
 
 // Uploads directory
@@ -71,6 +82,11 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
 }
 app.get('/uploads/:filename', fileAuth, serveDocument);
+
+// Health Check (Keep-Alive for Render Free Tier)
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 // Routes
 const authRoutes = require('./modules/auth/auth.routes');
@@ -99,10 +115,12 @@ app.use(errorHandler);
 
 // Initialize Queue Worker
 const { initWorker } = require('./services/queueService');
+const { initUploadWorker } = require('./services/uploadWorker');
 try {
   initWorker(io);
+  initUploadWorker();
 } catch (e) {
-  logger.warn('Failed to initialize queue worker, possibly Redis not running: ' + e.message);
+  logger.warn('Failed to initialize queue workers, possibly Redis not running: ' + e.message);
 }
 
 const port = process.env.PORT || 5000;

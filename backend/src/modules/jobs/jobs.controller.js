@@ -14,10 +14,20 @@ const getJob = async (req, res, next) => {
     const { id } = req.params;
     const job = await jobsService.getJobByShortId(id, req.user);
     
-    // IDOR protection: session-authenticated users can only access jobs 
-    // that belong to their session's machine (or jobs with no machine set)
-    if (req.session && job.machineId && req.session.machineId && job.machineId !== req.session.machineId) {
-      return res.status(403).json({ success: false, error: 'Access denied' });
+    // STRICT IDOR PROTECTION:
+    if (req.session) {
+      // If the session has a machineId, it can ONLY access jobs for that exact machine.
+      if (req.session.machineId) {
+        if (job.machineId !== req.session.machineId) {
+          return res.status(403).json({ success: false, error: 'Access denied: Job belongs to a different machine' });
+        }
+      } else {
+        // If the session has NO machineId, it can ONLY access jobs that also have NO machineId.
+        // It MUST NOT be allowed to access any job assigned to an actual machine!
+        if (job.machineId !== null) {
+          return res.status(403).json({ success: false, error: 'Access denied: Cannot access machine-assigned jobs without a machine session' });
+        }
+      }
     }
     
     // eta calculation can be added here or in service

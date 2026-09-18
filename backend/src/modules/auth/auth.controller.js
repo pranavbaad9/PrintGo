@@ -106,8 +106,7 @@ const createSession = async (req, res, next) => {
     res.status(200).json({
       success: true,
       sessionCode: session.code,
-      sessionToken,
-      tempMachineKeyForSetup: tempMachineKey
+      sessionToken
     });
   } catch (error) {
     next(error);

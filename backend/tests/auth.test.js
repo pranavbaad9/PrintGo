@@ -9,10 +9,13 @@ const { validate } = require('../src/middlewares/validate');
 
 // Mock the auth service to bypass DB
 jest.mock('../src/modules/auth/auth.service');
-// Mock prisma to bypass DB for createSession
 jest.mock('../src/utils/prisma', () => ({
   machine: {
     findUnique: jest.fn()
+  },
+  session: {
+    findUnique: jest.fn().mockResolvedValue({ status: 'WAITING_FOR_MOBILE', code: 'session-xyz', machineId: '123' }),
+    update: jest.fn().mockResolvedValue({})
   }
 }));
 
@@ -60,8 +63,9 @@ describe('Auth Endpoints', () => {
   describe('POST /api/auth/session', () => {
     it('should return session token for valid session id', async () => {
       const res = await request(app).post('/api/auth/session').send({
-        sessionId: 'session-xyz'
+        sessionCode: 'session-xyz'
       });
+      console.log(res.body);
 
       expect(res.statusCode).toEqual(200);
       expect(res.body.success).toBe(true);

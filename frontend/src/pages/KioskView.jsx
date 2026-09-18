@@ -65,7 +65,11 @@ const KioskView = () => {
             });
           });
         }
-      } catch (err) { console.error('Failed to acquire kiosk session:', err); }
+      } catch (err) { 
+        console.error('Failed to acquire kiosk session. Server might be waking up. Retrying in 5s...', err); 
+        // Auto-retry to handle Render cold starts gracefully
+        setTimeout(acquireSession, 5000);
+      }
     };
     acquireSession();
 

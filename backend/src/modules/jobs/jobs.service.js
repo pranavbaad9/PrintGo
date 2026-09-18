@@ -34,8 +34,8 @@ const getJobByShortId = async (shortId, user = null) => {
 
   // P2-002: Multi-tenancy check
   if (user && user.role !== 'SUPERADMIN') {
-    if (job.machine && job.machine.companyId !== user.companyId) {
-      throw new AppError('Access denied: Job belongs to another company', 403);
+    if (!job.machine || job.machine.companyId !== user.companyId) {
+      throw new AppError('Access denied: Job belongs to another company or is unassigned', 403);
     }
   }
 
@@ -43,7 +43,7 @@ const getJobByShortId = async (shortId, user = null) => {
 };
 
 const createJob = async (jobData) => {
-  const { file, settings, machineId } = jobData;
+  const { file, settings, machineId, encryptedKey, iv } = jobData;
   
   // Create document first
   const document = await prisma.document.create({
@@ -72,7 +72,9 @@ const createJob = async (jobData) => {
       copies: settings.copies,
       pagesToPrint,
       pageRangeType: settings.pageRangeType,
-      customRange: settings.customRange || null
+      customRange: settings.customRange || null,
+      encryptedKey: encryptedKey || null,
+      iv: iv || null
     },
     include: { document: true }
   });

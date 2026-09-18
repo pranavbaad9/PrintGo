@@ -130,13 +130,21 @@ const verifyPayment = async (orderId) => {
   }
 };
 
-const refundPayment = async (jobId) => {
+const refundPayment = async (jobId, user = null) => {
   const job = await prisma.printJob.findUnique({
     where: { shortId: jobId },
-    include: { payment: true }
+    include: { payment: true, machine: true }
   });
   
   if (!job) throw new AppError('Job not found', 404);
+  
+  // P1: Tenant Isolation / Refund Authorization
+  if (user && user.role !== 'SUPERADMIN') {
+    if (!job.machine || job.machine.companyId !== user.companyId) {
+      throw new AppError('Access denied: Cannot refund jobs for another company', 403);
+    }
+  }
+  
   if (!job.payment) throw new AppError('No payment found for this job', 400);
   if (job.payment.status !== 'SUCCESS') throw new AppError('Payment is not in SUCCESS state', 400);
   if (!job.payment.gatewayOrderId) throw new AppError('No gateway order ID found', 400);

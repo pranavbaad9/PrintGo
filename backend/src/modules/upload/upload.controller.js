@@ -1,4 +1,11 @@
+const { Queue } = require('bullmq');
+const { connection } = require('../../services/redisClient');
 const uploadService = require('./upload.service');
+
+let uploadQueue = null;
+if (connection) {
+  uploadQueue = new Queue('uploadQueue', { connection });
+}
 
 const handleUpload = async (req, res, next) => {
   try {
@@ -7,9 +14,19 @@ const handleUpload = async (req, res, next) => {
       throw new Error('No file uploaded.');
     }
 
-    // Use S3 URL if available, otherwise fallback to local URL
     const fileUrl = req.file.location || `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-    const pages = await uploadService.getPageCount(fileUrl, req.file.mimetype);
+    
+    let pages = 1;
+    const isEncrypted = req.body.isEncrypted === 'true';
+    const claimedPages = parseInt(req.body.claimedPages) || 1;
+
+    if (uploadQueue && !isEncrypted) {
+      const job = await uploadQueue.add('countPages', { fileUrl, mimetype: req.file.mimetype });
+      pages = await job.waitUntilFinished(new (require('bullmq').QueueEvents)('uploadQueue', { connection }));
+    } else {
+      // Fallback or Encrypted bypass
+      pages = await uploadService.getPageCount(fileUrl, req.file.mimetype, isEncrypted, claimedPages);
+    }
 
     res.json({
       success: true,

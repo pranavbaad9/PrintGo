@@ -120,7 +120,7 @@ const cashfreeWebhook = async (req, res, next) => {
 const refundOrder = async (req, res, next) => {
   try {
     const { id } = req.params; // jobId
-    const updatedJob = await paymentsService.refundPayment(id);
+    const updatedJob = await paymentsService.refundPayment(id, req.user);
     
     const io = req.app.get('io');
     if (updatedJob.machineId) {

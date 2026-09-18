@@ -42,4 +42,26 @@ const restrictTo = (...roles) => {
   };
 };
 
-module.exports = { protect, restrictTo };
+const protectMachine = async (req, res, next) => {
+  try {
+    const machineKey = req.headers['x-machine-key'];
+    if (!machineKey) {
+      return next(new AppError('Authentication error: Missing machine key', 401));
+    }
+
+    const machine = await prisma.machine.findUnique({ where: { machineKey } });
+    if (!machine) {
+      return next(new AppError('Authentication error: Invalid machine key', 401));
+    }
+    if (machine.status === 'SUSPENDED') {
+      return next(new AppError('Authentication error: Machine is suspended', 401));
+    }
+
+    req.machine = machine;
+    next();
+  } catch (error) {
+    next(new AppError('Machine authentication failed', 401));
+  }
+};
+
+module.exports = { protect, restrictTo, protectMachine };

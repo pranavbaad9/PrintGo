@@ -61,6 +61,20 @@ const setupSockets = (io) => {
       socket.join('admins');
     }
 
+    socket.on('register_public_key', async ({ publicKey }) => {
+      if (socket.userType === 'printer' && socket.machineId) {
+        try {
+          await prisma.machine.update({
+            where: { id: socket.machineId },
+            data: { publicKey }
+          });
+          logger.info(`RSA Public Key registered for machine ${socket.machineId}`);
+        } catch (err) {
+          logger.error(`Error registering public key for machine ${socket.machineId}:`, err);
+        }
+      }
+    });
+
     // Kiosk <-> Mobile Sync
     socket.on('join_session', (sessionId) => {
       // Validate: session tokens can only join their own session room
@@ -165,19 +179,17 @@ const setupSockets = (io) => {
         const currentJob = await prisma.printJob.findUnique({ where: { shortId: jobId }, include: { document: true } });
         if (!currentJob || !isValidJobTransition(currentJob.status, 'COMPLETED')) return;
         
+        // P0: Enforce Machine Ownership
+        if (currentJob.machineId !== socket.machineId) {
+          logger.warn(`Machine ${socket.machineId} attempted to mark job ${jobId} as COMPLETED, but job belongs to ${currentJob.machineId}`);
+          return;
+        }
+        
         const completedJob = await prisma.printJob.update({
           where: { shortId: jobId },
           data: { status: 'COMPLETED' },
           include: { document: true }
         });
-
-        // Emit status change is now handled universally by Prisma $extends
-
-        // P1-002 / P2-001: Schedule document file deletion after 5 minutes (grace period)
-        if (completedJob.document && completedJob.document.filename) {
-          const { deleteFile } = require('./utils/storage');
-          setTimeout(() => deleteFile(completedJob.document.filename), 5 * 60 * 1000);
-        }
       } catch (err) {
         logger.error(`Failed to update job ${jobId} to COMPLETED:`, err);
       }
@@ -190,25 +202,23 @@ const setupSockets = (io) => {
         const currentJob = await prisma.printJob.findUnique({ where: { shortId: jobId } });
         if (!currentJob || !isValidJobTransition(currentJob.status, 'FAILED')) return;
 
+        // P0: Enforce Machine Ownership
+        if (currentJob.machineId !== socket.machineId) {
+          logger.warn(`Machine ${socket.machineId} attempted to mark job ${jobId} as FAILED, but job belongs to ${currentJob.machineId}`);
+          return;
+        }
+
         const failedJob = await prisma.printJob.update({
           where: { shortId: jobId },
           data: { status: 'FAILED' },
           include: { document: true }
         });
 
-        // Emit status change is now handled universally by Prisma $extends
-
-        // P1-003: Delete document file when job fails
-        if (failedJob.document && failedJob.document.filename) {
-          const { deleteFile } = require('./utils/storage');
-          setTimeout(() => deleteFile(failedJob.document.filename), 5 * 60 * 1000);
-        }
-
         // P3-002: Automated Refund on Print Failure
         if (failedJob.paymentId) {
           logger.info(`Initiating automated refund for FAILED job ${jobId}...`);
           const paymentsService = require('./modules/payments/payments.service');
-          await paymentsService.refundPaymentByJob(failedJob.id);
+          await paymentsService.refundPayment(failedJob.shortId);
         }
       } catch (err) {
         logger.error(`Failed to process physical error for job ${jobId}:`, err);
@@ -228,19 +238,18 @@ const setupSockets = (io) => {
           logger.warn(`Ignoring spooler error for job ${jobId}: invalid transition from ${currentJob?.status}`);
           return;
         }
+
+        // P0: Enforce Machine Ownership
+        if (currentJob.machineId !== socket.machineId) {
+          logger.warn(`Machine ${socket.machineId} attempted to mark job ${jobId} spooler error, but job belongs to ${currentJob.machineId}`);
+          return;
+        }
+
         const failedJob = await prisma.printJob.update({
           where: { shortId: jobId },
           data: { status: 'FAILED' },
           include: { document: true }
         });
-        
-        // Emit status change is now handled universally by Prisma $extends
-
-        // P1-003: Delete document file when job fails
-        if (failedJob.document && failedJob.document.filename) {
-          const { deleteFile } = require('./utils/storage');
-          setTimeout(() => deleteFile(failedJob.document.filename), 5 * 60 * 1000);
-        }
       } catch (err) {
         logger.error(`Failed to update job ${jobId} to FAILED:`, err);
         io.to(`machine_${socket.machineId}`).emit('job_status_changed', { id: 'error', shortId: jobId, status: 'FAILED', error });

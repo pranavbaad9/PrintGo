@@ -5,7 +5,13 @@ const ptp = require('pdf-to-printer');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { exec } = require('child_process');
+const util = require('util');
+const { exec, execFile } = require('child_process');
+const execFileAsync = util.promisify(execFile);
+const crypto = require('crypto');
+const forge = require('node-forge');
+const pdfParse = require('pdf-parse');
+const SpoolerMonitor = require('./src/spooler');
 
 process.on('uncaughtException', (err) => {
   console.error('🔥 CRITICAL ERROR: Uncaught Exception:', err);
@@ -24,17 +30,22 @@ if (!MACHINE_KEY) {
   process.exit(1);
 }
 
+if (PRINTER_NAME && !/^[a-zA-Z0-9_\-\s]+$/.test(PRINTER_NAME)) {
+  console.error('🔥 FATAL ERROR: PRINTER_NAME contains invalid characters. Only alphanumeric, space, underscore, and dash are allowed.');
+  process.exit(1);
+}
+
 // P3-003: Printer Compatibility & Driver Validation
 async function validatePrinter() {
-    if (process.env.PRINTER_NAME === 'SimulationMode') {
+    if (PRINTER_NAME === 'SimulationMode') {
         console.log(`\n🖨️  Running in SIMULATION MODE. Skipping printer validation.`);
         return;
     }
     try {
-        await execAsync(`powershell "Get-Printer -Name '${process.env.PRINTER_NAME}' -ErrorAction Stop | Select-Object Name"`);
-        console.log(`\n✅ Validated local printer: ${process.env.PRINTER_NAME}`);
+        await execFileAsync('powershell.exe', ['-Command', `Get-Printer -Name '${PRINTER_NAME}' -ErrorAction Stop | Select-Object Name`]);
+        console.log(`\n✅ Validated local printer: ${PRINTER_NAME}`);
     } catch (error) {
-        console.error(`\n🔥 FATAL ERROR: Printer '${process.env.PRINTER_NAME}' does not exist on this machine.`);
+        console.error(`\n🔥 FATAL ERROR: Printer '${PRINTER_NAME}' does not exist on this machine.`);
         console.error(`Please verify the PRINTER_NAME in .env matches the Windows printer name exactly.\n`);
         process.exit(1);
     }
@@ -59,12 +70,24 @@ const socket = io(BACKEND_URL, {
   auth: { machineKey: MACHINE_KEY }
 });
 
+// Generate RSA Keypair on startup for E2EE
+console.log('🔐 Generating RSA-OAEP Keypair for End-to-End Encryption...');
+const rsaKeypair = forge.pki.rsa.generateKeyPair({ bits: 2048, e: 0x10001 });
+const publicKeyPem = forge.pki.publicKeyToPem(rsaKeypair.publicKey);
+const privateKeyPem = forge.pki.privateKeyToPem(rsaKeypair.privateKey);
+console.log('✅ Keys generated successfully.');
+
+const spoolerMonitor = new SpoolerMonitor({ execFile, printerName: PRINTER_NAME });
+
 socket.on('connect', () => {
   console.log(`✅ Connected to cloud backend! (Socket ID: ${socket.id})`);
   
+  // Register Public Key with Backend for E2EE
+  socket.emit('register_public_key', { publicKey: publicKeyPem });
+  
   // Periodically send printer status
   setInterval(() => {
-    checkPrinterStatus();
+    spoolerMonitor.checkPrinterStatus(socket);
   }, 30000); // every 30s
 });
 
@@ -91,49 +114,7 @@ socket.on('connect_error', (err) => {
   console.error(`🔌 Connection Error: ${err.message}`);
 });
 
-const checkPrinterStatus = () => {
-  if (!PRINTER_NAME) return;
-  // Use powershell to check if printer is offline or out of paper
-  exec(`powershell "Get-WmiObject -Class Win32_Printer -Filter \\"Name='${PRINTER_NAME}'\\" | Select-Object PrinterStatus, ExtendedPrinterStatus, ErrorState"`, (error, stdout) => {
-    if (error) {
-      console.error(`Error querying printer status: ${error.message}`);
-      return;
-    }
-    
-    let isError = false;
-    let errorMessage = '';
-
-    // ErrorState 4 = Paper Out, 5 = Paper Jam, 6 = Offline
-    if (stdout.includes('4') && stdout.includes('Paper Out')) {
-      isError = true;
-      errorMessage = 'Out of Paper';
-    } else if (stdout.includes('True') && stdout.includes('Offline')) { // 'WorkOffline' header exists, we want to check if the value is 'True'
-      isError = true;
-      errorMessage = 'Printer Offline';
-    } else if (stdout.includes('5')) {
-      isError = true;
-      errorMessage = 'Paper Jam';
-    }
-
-    const totalMem = os.totalmem();
-    const freeMem = os.freemem();
-    const memoryUsage = ((totalMem - freeMem) / totalMem * 100).toFixed(2);
-    const uptime = os.uptime();
-
-    socket.emit('printer_status_update', {
-      isError,
-      errorMessage,
-      printerName: PRINTER_NAME,
-      telemetry: {
-        memoryUsage: `${memoryUsage}%`,
-        uptime: `${uptime}s`,
-        platform: os.platform(),
-        arch: os.arch()
-      },
-      timestamp: new Date().toISOString()
-    });
-  });
-};
+// checkPrinterStatus logic has been moved to src/spooler.js
 
 socket.on('physical_print_job', async (jobData) => {
   // Command Injection Prevention (P0)
@@ -158,19 +139,58 @@ socket.on('physical_print_job', async (jobData) => {
     const response = await axios({
       method: 'GET',
       url: fileUrl,
-      responseType: 'stream',
+      responseType: 'arraybuffer', // Get as buffer for decryption
       headers: { 'x-machine-key': MACHINE_KEY }
     });
 
-    const writer = fs.createWriteStream(localFilePath);
-    response.data.pipe(writer);
+    let fileBuffer = response.data;
 
-    await new Promise((resolve, reject) => {
-      writer.on('finish', resolve);
-      writer.on('error', reject);
-    });
+    // E2E Decryption & Page Verification
+    if (jobData.encryptedKey && jobData.iv) {
+      console.log(`🔒 Encrypted job detected. Decrypting...`);
+      try {
+        // 1. Decrypt AES Key using RSA Private Key
+        const encryptedKeyBuffer = Buffer.from(jobData.encryptedKey, 'base64');
+        const decryptedKey = crypto.privateDecrypt(
+          {
+            key: privateKeyPem,
+            padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+            oaepHash: 'sha256'
+          },
+          encryptedKeyBuffer
+        );
 
-    console.log(`✅ Download complete. Sending to printer...`);
+        // 2. Decrypt File Payload using AES-GCM
+        const decipher = crypto.createDecipheriv('aes-256-gcm', Buffer.from(jobData.iv, 'base64'), decryptedKey);
+        
+        // Extract Auth Tag (last 16 bytes)
+        const authTag = fileBuffer.slice(-16);
+        const encryptedData = fileBuffer.slice(0, -16);
+        
+        decipher.setAuthTag(authTag);
+        
+        const decryptedBuffer = Buffer.concat([decipher.update(encryptedData), decipher.final()]);
+        fileBuffer = decryptedBuffer;
+        
+        console.log(`✅ Decryption successful. Validating page count...`);
+        
+        // 3. Verify Page Count (Fraud Protection)
+        const pdfData = await pdfParse(fileBuffer);
+        const actualPages = pdfData.numpages;
+        const claimedPages = jobData.pagesToPrint || 1;
+        
+        if (actualPages > claimedPages) {
+          throw new Error(`Fraud detected! Claimed pages: ${claimedPages}, Actual pages: ${actualPages}`);
+        }
+        
+        console.log(`📄 Page count validated (${actualPages} pages).`);
+      } catch (decErr) {
+        throw new Error(`Security Exception: ${decErr.message}`);
+      }
+    }
+
+    fs.writeFileSync(localFilePath, fileBuffer);
+    console.log(`✅ File saved to disk. Sending to printer...`);
 
     const printOptions = {};
     if (PRINTER_NAME) {
@@ -190,7 +210,12 @@ socket.on('physical_print_job', async (jobData) => {
         printOptions.duplex = true;
       }
       if (jobData.settings.pageRangeType === 'custom' && jobData.settings.customRange) {
-        printOptions.pages = jobData.settings.customRange;
+        // P1: Validate customRange input to prevent command injection
+        if (/^[0-9,-]+$/.test(jobData.settings.customRange)) {
+          printOptions.pages = jobData.settings.customRange;
+        } else {
+          console.error(`⚠️  WARNING: Invalid customRange input detected: ${jobData.settings.customRange}. Ignoring.`);
+        }
       }
     }
     
@@ -205,71 +230,10 @@ socket.on('physical_print_job', async (jobData) => {
       socket.emit('print_spooler_success', { jobId: jobData.jobId });
 
       // P3-001: True Print Verification via Spooler Polling
-      console.log(`👀 Monitoring spooler queue for Job ${jobData.jobId}...`);
-      let checkAttempts = 0;
-      let wasSeenInQueue = false; // Prevents false-positive success before job reaches spooler
-      const maxAttempts = 120; // 2 minutes (120 * 1s)
-      
-      const pollSpooler = setInterval(() => {
-        checkAttempts++;
-        if (checkAttempts > maxAttempts) {
-          clearInterval(pollSpooler);
-          console.warn(`⚠️  Spooler monitoring timed out for Job ${jobData.jobId}`);
-          return;
-        }
-
-        exec(`powershell "Get-PrintJob -PrinterName '${PRINTER_NAME}' | Select-Object DocumentName, JobStatus | ConvertTo-Json"`, (error, stdout) => {
-          if (error) return; // ignore errors and retry
-          if (!stdout || stdout.trim() === '') {
-            // No jobs in queue!
-            if (wasSeenInQueue) {
-              // It was there, now it's gone -> success!
-              clearInterval(pollSpooler);
-              console.log(`✅ Job ${jobData.jobId} physically completed (cleared from spooler)!`);
-              socket.emit('print_physical_success', { jobId: jobData.jobId });
-              if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
-            }
-            return;
-          }
-
-          try {
-            let jobs = JSON.parse(stdout);
-            if (!Array.isArray(jobs)) jobs = [jobs];
-
-            // Find our job (document name usually contains the filename we sent)
-            const ourJob = jobs.find(j => j.DocumentName && j.DocumentName.includes(jobData.jobId));
-            
-            if (ourJob) {
-              wasSeenInQueue = true; // We successfully observed it in the spooler!
-              // Check for errors
-              const status = ourJob.JobStatus || '';
-              if (status.includes('Error') || status.includes('PaperOut') || status.includes('PaperJam') || status.includes('Blocked')) {
-                clearInterval(pollSpooler);
-                console.error(`❌ Physical Print Error for Job ${jobData.jobId}: ${status}`);
-                socket.emit('print_physical_error', { jobId: jobData.jobId, error: status });
-                exec(`powershell "Get-PrintJob -PrinterName '${PRINTER_NAME}' | Where-Object DocumentName -like '*${jobData.jobId}*' | Remove-PrintJob"`);
-                if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
-              }
-            } else if (wasSeenInQueue) {
-              // Our job is no longer in the queue but it WAS seen. Success!
-              clearInterval(pollSpooler);
-              console.log(`✅ Job ${jobData.jobId} physically completed (cleared from spooler)!`);
-              socket.emit('print_physical_success', { jobId: jobData.jobId });
-              if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
-            }
-          } catch (e) {
-            // JSON parse error, ignore and retry next second
-          }
-        });
-      }, 1000); // Check every second
+      spoolerMonitor.startPollingJob(jobData.jobId, localFilePath, socket);
     } else {
       // Simulation mode bypass (No physical printer)
-      console.log(`⚠️  SIMULATION MODE: Bypassing physical print for job ${jobData.jobId}`);
-      socket.emit('print_spooler_success', { jobId: jobData.jobId });
-      setTimeout(() => {
-        socket.emit('print_physical_success', { jobId: jobData.jobId });
-        if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
-      }, 3000);
+      spoolerMonitor.startPollingJob(jobData.jobId, localFilePath, socket);
     }
 
 
@@ -285,3 +249,15 @@ socket.on('physical_print_job', async (jobData) => {
 setInterval(() => {
   socket.emit('heartbeat');
 }, 30000);
+
+// P4-001: Render Free Tier Keep-Alive
+// Render spins down free instances after 15 mins of inactivity. 
+// A raw HTTP GET request every 10 minutes ensures the server stays awake while the kiosk is online.
+setInterval(async () => {
+  try {
+    await axios.get(`${BACKEND_URL}/api/health`);
+    console.log(`📡 Keep-Alive ping sent to ${BACKEND_URL}/api/health`);
+  } catch (error) {
+    console.error(`⚠️  Keep-Alive ping failed: ${error.message}`);
+  }
+}, 10 * 60 * 1000); // 10 minutes

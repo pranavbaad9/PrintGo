@@ -7,6 +7,7 @@ import { DashboardStats } from '../components/admin/DashboardStats';
 import { LivePrintQueue } from '../components/admin/LivePrintQueue';
 import { AuditHistory } from '../components/admin/AuditHistory';
 import { MachinesList } from '../components/admin/MachinesList';
+import { TelemetryDashboard } from '../components/admin/TelemetryDashboard';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://printgo-ssoi.onrender.com';
 
@@ -17,6 +18,7 @@ const AdminDashboard = () => {
   const [jobs, setJobs] = useState([]);
   const [machines, setMachines] = useState([]);
   const [printerStatus, setPrinterStatus] = useState({ isError: false, message: 'Online' });
+  const [telemetryHistory, setTelemetryHistory] = useState([]);
 
   useEffect(() => {
     const token = localStorage.getItem('adminToken');
@@ -105,6 +107,25 @@ const AdminDashboard = () => {
 
     socket.on('printer_status_update', (status) => {
       setPrinterStatus({ isError: status.isError, message: status.errorMessage || 'Online' });
+      
+      if (status.telemetry) {
+        setTelemetryHistory(prev => {
+          const now = new Date();
+          const timeLabel = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const memVal = parseFloat(status.telemetry.memoryUsage) || 0;
+          
+          const newPoint = {
+            ...status,
+            time: timeLabel,
+            memVal
+          };
+          
+          // Keep last 30 data points (approx 15 minutes if polling every 30s)
+          const updated = [...prev, newPoint];
+          if (updated.length > 30) return updated.slice(updated.length - 30);
+          return updated;
+        });
+      }
     });
 
     return () => socket.disconnect();
@@ -151,6 +172,8 @@ const AdminDashboard = () => {
       </div>
 
       <DashboardStats jobs={jobs} machines={machines} />
+      
+      <TelemetryDashboard history={telemetryHistory} />
 
       <div className="grid-2">
         <LivePrintQueue queue={queue} onStatusChange={handleStatusChange} />

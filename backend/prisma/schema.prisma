@@ -72,6 +72,7 @@ model Machine {
   healthStatus    String         @default("UNKNOWN") // ONLINE, OFFLINE, PAPER_OUT, ERROR
   printerModel    String?
   softwareVersion String?
+  publicKey       String?        @db.Text
   lastOnline      DateTime?
   
   companyId       String?
@@ -226,6 +227,10 @@ model PrintJob {
   pagesToPrint  Int           @default(1)
   pageRangeType String        @default("all") // all, custom
   customRange   String?
+  
+  // E2E Encryption
+  encryptedKey  String?       @db.Text
+  iv            String?
   
   printHistory  PrintHistory[]
 

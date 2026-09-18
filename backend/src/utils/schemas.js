@@ -12,7 +12,7 @@ const loginSchema = z.object({
 
 const sessionSchema = z.object({
   body: z.object({
-    sessionId: z.string().min(1).optional(),
+    sessionCode: z.string().min(1).optional(),
     machineId: z.string().uuid().optional(),
   }).strict(),
   query: z.any(),
@@ -96,6 +96,25 @@ const createCompanySchema = z.object({
   params: z.any(),
 });
 
+// Subscriptions Schemas
+const createSubscriptionSchema = z.object({
+  body: z.object({
+    machineId: z.string().uuid(),
+    planId: z.string().uuid(),
+    billingType: z.enum(['MONTHLY', 'YEARLY', 'LIFETIME']),
+  }).strip(),
+  query: z.any(),
+  params: z.any(),
+});
+
+const cancelSubscriptionSchema = z.object({
+  body: z.any(),
+  query: z.any(),
+  params: z.object({
+    id: z.string().uuid(),
+  }).strip(),
+});
+
 module.exports = {
   loginSchema,
   sessionSchema,
@@ -104,4 +123,6 @@ module.exports = {
   createMachineSchema,
   updateMachineSchema,
   createCompanySchema,
+  createSubscriptionSchema,
+  cancelSubscriptionSchema,
 };

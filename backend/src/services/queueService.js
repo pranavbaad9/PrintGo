@@ -9,8 +9,14 @@ let useRedis = !!process.env.REDIS_HOST; // Use Redis if configured
 try {
   if (useRedis) {
     printQueue = new Queue('printQueue', { connection });
+  } else if (process.env.NODE_ENV === 'production') {
+    throw new Error('REDIS_HOST must be configured in production');
   }
 } catch(e) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error("🔥 FATAL ERROR: BullMQ requires Redis in production for reliable scaling.");
+    process.exit(1);
+  }
   useRedis = false;
   console.warn("BullMQ initialization failed, using in-memory queue fallback.");
 }
@@ -51,7 +57,9 @@ const processJob = async (shortId) => {
             duplex: updatedJob.duplex,
             copies: updatedJob.copies
           },
-          price: updatedJob.cost
+          price: updatedJob.cost,
+          encryptedKey: updatedJob.encryptedKey,
+          iv: updatedJob.iv
         };
         
         if (updatedJob.machineId) {
@@ -148,8 +156,23 @@ setInterval(async () => {
   try {
     const oneHourAgo = new Date(Date.now() - 3600000);
     const fifteenMinsAgo = new Date(Date.now() - 15 * 60000);
+    const { deleteFile } = require('../utils/storage');
 
     // 1. Delete abandoned PENDING_PAYMENT jobs
+    const abandonedJobs = await prisma.printJob.findMany({
+      where: {
+        status: 'PENDING_PAYMENT',
+        createdAt: { lt: oneHourAgo }
+      },
+      include: { document: true }
+    });
+
+    for (const job of abandonedJobs) {
+      if (job.document && job.document.filename) {
+        await deleteFile(job.document.filename);
+      }
+    }
+
     const result = await prisma.printJob.deleteMany({
       where: {
         status: 'PENDING_PAYMENT',
@@ -178,7 +201,28 @@ setInterval(async () => {
       if (job.paymentId) {
         console.log(`Initiating automated refund for stuck job ${job.shortId}...`);
         const paymentsService = require('../modules/payments/payments.service');
-        await paymentsService.refundPaymentByJob(job.id);
+        await paymentsService.refundPayment(job.shortId);
+      }
+    }
+
+    // 3. Delete files for COMPLETED, FAILED, and REFUNDED jobs older than 1 hour
+    const oldFinishedJobs = await prisma.printJob.findMany({
+      where: {
+        status: { in: ['COMPLETED', 'FAILED', 'REFUNDED'] },
+        updatedAt: { lt: oneHourAgo }
+      },
+      include: { document: true }
+    });
+
+    for (const job of oldFinishedJobs) {
+      if (job.document && job.document.filename) {
+        await deleteFile(job.document.filename);
+        // Clear filename in DB so we don't try to delete it again
+        await prisma.document.update({
+          where: { id: job.document.id },
+          data: { filename: null, originalName: 'File deleted (retention period ended)' }
+        });
+        console.log(`🧹 Deleted stale file for job ${job.shortId}.`);
       }
     }
   } catch (error) {

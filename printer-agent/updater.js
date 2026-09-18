@@ -24,6 +24,10 @@ https.get(VERSION_ENDPOINT, (res) => {
       const response = JSON.parse(data);
       if (response.success && response.hash) {
         const pinnedHash = response.hash;
+        if (!/^[a-f0-9]{40}$/i.test(pinnedHash)) {
+          console.error(`❌ Invalid hash received: ${pinnedHash}`);
+          process.exit(1);
+        }
         console.log(`✅ Received pinned hash: ${pinnedHash}`);
         
         console.log('Pulling latest changes...');
@@ -37,7 +41,7 @@ https.get(VERSION_ENDPOINT, (res) => {
         
         console.log('Restarting PM2 agent process...');
         try {
-          execSync('pm2 restart printgo-agent', { stdio: 'inherit' });
+          execSync('pm2 restart PrintGo_Agent', { stdio: 'inherit' });
         } catch (e) {
           console.log('PM2 not found or failed to restart. If running manually, please restart the process.');
         }

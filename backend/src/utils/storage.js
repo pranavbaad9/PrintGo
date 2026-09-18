@@ -6,7 +6,11 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('./logger');
 
-const useS3 = !!process.env.AWS_S3_BUCKET;
+const useS3 = process.env.NODE_ENV === 'production' || !!process.env.AWS_S3_BUCKET;
+
+if (useS3 && (!process.env.AWS_S3_BUCKET || !process.env.AWS_REGION)) {
+  logger.warn('WARNING: Running in S3 mode but AWS credentials or bucket are missing from .env!');
+}
 
 let s3Client;
 if (useS3) {
@@ -22,6 +26,17 @@ if (useS3) {
   logger.info('Storage Service initialized with Local Disk (AWS_S3_BUCKET not set)');
 }
 
+const getSafeExtension = (mimetype) => {
+  const map = {
+    'application/pdf': '.pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+    'image/jpeg': '.jpg',
+    'image/png': '.png'
+  };
+  return map[mimetype] || '.bin';
+};
+
 const getStorage = () => {
   if (useS3) {
     return multerS3({
@@ -31,7 +46,7 @@ const getStorage = () => {
         cb(null, { fieldName: file.fieldname });
       },
       key: function (req, file, cb) {
-        const ext = path.extname(file.originalname);
+        const ext = getSafeExtension(file.mimetype);
         cb(null, `uploads/${uuidv4()}${ext}`);
       }
     });
@@ -45,7 +60,7 @@ const getStorage = () => {
         cb(null, uploadDir);
       },
       filename: function (req, file, cb) {
-        const ext = path.extname(file.originalname);
+        const ext = getSafeExtension(file.mimetype);
         cb(null, `${uuidv4()}${ext}`);
       }
     });
