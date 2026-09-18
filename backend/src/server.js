@@ -138,7 +138,6 @@ const autoSeed = async () => {
         data: {
           name: 'Main Shop Printer',
           location: 'Front Desk',
-          type: 'KIOSK',
           machineKey: machineKey,
           status: 'ACTIVE',
         }
@@ -156,8 +155,7 @@ const autoSeed = async () => {
           name: 'PrintGo Admin',
           email: 'admin@printgo.in',
           password: hashedPassword,
-          role: 'SUPERADMIN',
-          phone: '9999999999'
+          role: 'SUPERADMIN'
         }
       });
       logger.info('✅ Auto-seeded superadmin!');
