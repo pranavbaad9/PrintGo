@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const forge = require('node-forge');
 const pdfParse = require('pdf-parse');
 const SpoolerMonitor = require('./src/spooler');
+const { scanAndCreatePDF } = require('./src/scanner');
 
 process.on('uncaughtException', (err) => {
   console.error('🔥 CRITICAL ERROR: Uncaught Exception:', err);
@@ -242,6 +243,45 @@ socket.on('physical_print_job', async (jobData) => {
     console.error(`❌ ERROR processing Job ${jobData.jobId}:`, error.message);
     socket.emit('print_spooler_error', { jobId: jobData.jobId, error: error.message });
     if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
+  }
+});
+
+socket.on('physical_copy_job', async (jobData) => {
+  if (!jobData.jobId || !/^[a-zA-Z0-9_-]+$/.test(jobData.jobId)) {
+    console.error(`❌ REJECTED Copy Job: Invalid jobId format: ${jobData.jobId}`);
+    return;
+  }
+
+  console.log(`\n======================================================`);
+  console.log(`📥 NEW COPY JOB RECEIVED! [Job ID: ${jobData.jobId}]`);
+  console.log(`======================================================`);
+
+  try {
+    const scannedPdfPath = await scanAndCreatePDF(jobData.jobId);
+    console.log(`✅ Document scanned. Sending to printer...`);
+
+    const printOptions = {};
+    if (PRINTER_NAME) {
+      printOptions.printer = PRINTER_NAME;
+    }
+    
+    if (jobData.settings) {
+      if (jobData.settings.copies) printOptions.copies = jobData.settings.copies;
+      if (jobData.settings.color === 'bw') printOptions.monochrome = true;
+      if (jobData.settings.duplex === 'double') printOptions.duplex = true;
+    }
+    
+    if (PRINTER_NAME) {
+      await ptp.print(scannedPdfPath, printOptions);
+      console.log(`🖨️  SUCCESS: Copy Job ${jobData.jobId} sent to Windows Print Spooler!`);
+      socket.emit('print_spooler_success', { jobId: jobData.jobId });
+      spoolerMonitor.startPollingJob(jobData.jobId, scannedPdfPath, socket);
+    } else {
+      spoolerMonitor.startPollingJob(jobData.jobId, scannedPdfPath, socket);
+    }
+  } catch (error) {
+    console.error(`❌ ERROR processing Copy Job ${jobData.jobId}:`, error.message);
+    socket.emit('print_spooler_error', { jobId: jobData.jobId, error: error.message });
   }
 });
 

@@ -10,6 +10,7 @@ router.get('/', protect, restrictTo('SUPERADMIN', 'FRANCHISEE'), jobsController.
 router.get('/export/csv', protect, restrictTo('SUPERADMIN', 'FRANCHISEE'), jobsController.exportJobsCsv);
 router.get('/:id', requireSessionOrUser, jobsController.getJob);
 router.post('/', requireSessionOrUser, validate(createJobSchema), jobsController.createJob);
+router.post('/create-copy', requireSessionOrUser, jobsController.createCopyJob);
 router.put('/:id/status', protect, restrictTo('SUPERADMIN', 'FRANCHISEE', 'STAFF'), validate(updateJobStatusSchema), jobsController.updateJobStatus);
 
 module.exports = router;

@@ -63,7 +63,11 @@ const processJob = async (shortId) => {
         };
         
         if (updatedJob.machineId) {
-          globalIo.to(`machine_${updatedJob.machineId}`).emit('physical_print_job', printData);
+          if (updatedJob.isCopyJob) {
+            globalIo.to(`machine_${updatedJob.machineId}`).emit('physical_copy_job', printData);
+          } else {
+            globalIo.to(`machine_${updatedJob.machineId}`).emit('physical_print_job', printData);
+          }
         } else {
           // No machineId assigned — cannot send to a specific printer
           // Log a warning instead of broadcasting to ALL sockets
