@@ -22,6 +22,21 @@ const AppError = require('../utils/AppError');
  */
 const requireSessionOrUser = async (req, res, next) => {
   try {
+    const prisma = require('../utils/prisma');
+
+    // 1. Check for Machine Key
+    const machineKey = req.headers['x-machine-key'];
+    if (machineKey) {
+      const machine = await prisma.machine.findUnique({ where: { machineKey } });
+      if (machine) {
+        if (machine.status === 'SUSPENDED') {
+          return next(new AppError('Machine is suspended.', 401));
+        }
+        req.machine = machine;
+        return next();
+      }
+    }
+
     let token;
 
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
@@ -31,7 +46,7 @@ const requireSessionOrUser = async (req, res, next) => {
     }
 
     if (!token) {
-      return next(new AppError('Authentication required. Please provide a session or user token.', 401));
+      return next(new AppError('Authentication required. Please provide a session or user token, or machine key.', 401));
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -46,7 +61,6 @@ const requireSessionOrUser = async (req, res, next) => {
     }
 
     // Otherwise treat as a regular user token — look up the user
-    const prisma = require('../utils/prisma');
     const currentUser = await prisma.user.findUnique({
       where: { id: decoded.id },
     });

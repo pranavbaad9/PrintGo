@@ -89,6 +89,12 @@ const MobileView = () => {
           newSocket.on('job_status_changed', (job) => {
             if (['WAITING', 'PRINTING', 'COMPLETED'].includes(job.status) && step !== 4) setStep(4);
           });
+          newSocket.on('scan_completed', (data) => {
+            setFileData(data);
+            setJobType('print');
+            setUploading(false);
+            setStep(2);
+          });
         }
       } catch (err) {
         console.error('Failed to join session:', err);
@@ -142,10 +148,10 @@ const MobileView = () => {
       return count > 0 ? count : totalPages;
     };
 
-    const totalPages = jobType === 'copy' ? 1 : (fileData?.pages || 1);
-    const pagesToPrint = jobType === 'copy' ? 1 : (settings.pageRangeType === 'custom'
+    const totalPages = fileData?.pages || 1;
+    const pagesToPrint = settings.pageRangeType === 'custom'
       ? calculateCustomPages(settings.customRange, totalPages)
-      : totalPages);
+      : totalPages;
 
     let calc = 0;
     if (settings.color === 'color') {
@@ -251,6 +257,11 @@ const MobileView = () => {
     }
   };
 
+  const initiatePhysicalScan = () => {
+    setUploading(true);
+    socket.emit('request_physical_scan', { sessionId });
+  };
+
   const handleSettingsChange = (e) => {
     const { name, value, type, checked } = e.target;
     setSettings(prev => ({
@@ -265,14 +276,10 @@ const MobileView = () => {
       let endpoint = `${API_URL}/api/jobs`;
       const payload = { settings };
       
-      if (jobType === 'print') {
-        payload.file = fileData;
-        if (encryptedKey && iv) {
-          payload.encryptedKey = encryptedKey;
-          payload.iv = iv;
-        }
-      } else {
-        endpoint = `${API_URL}/api/jobs/create-copy`;
+      payload.file = fileData;
+      if (encryptedKey && iv) {
+        payload.encryptedKey = encryptedKey;
+        payload.iv = iv;
       }
       
       const res = await axios.post(endpoint, payload, { timeout: 15000, headers: authHeaders() });
@@ -372,13 +379,17 @@ const MobileView = () => {
               <input id="file-upload" type="file" style={{ display: 'none' }} onChange={handleFileUpload} disabled={uploading} />
             </Card>
             
-            <Card glass className="text-center cursor-pointer hover:shadow-lg transition-all" onClick={() => { setJobType('copy'); setStep(2); }}>
+            <Card glass className="text-center cursor-pointer hover:shadow-lg transition-all" onClick={uploading ? undefined : initiatePhysicalScan}>
               <div style={{ display: 'inline-flex', background: 'var(--success-50)', borderRadius: '50%', padding: '1rem', marginBottom: '1rem' }}>
                 <Settings size={32} style={{ color: 'var(--success-500)' }} />
               </div>
               <h2 className="text-2xl font-bold mb-2">Make Physical Copies</h2>
               <p className="text-muted mb-4">Scan using Kiosk ADF</p>
-              <div className="btn w-full inline-block" style={{ background: 'var(--success-500)', color: 'white' }}>Start Copying</div>
+              {uploading ? (
+                <div className="text-main font-semibold"><Loader size={18} className="animate-spin inline mr-2" /> Scanning Pages...</div>
+              ) : (
+                <div className="btn w-full inline-block" style={{ background: 'var(--success-500)', color: 'white' }}>Start Scanning</div>
+              )}
             </Card>
           </div>
         );
@@ -414,24 +425,18 @@ const MobileView = () => {
               </div>
             </div>
 
-            {jobType === 'print' && (
-              <div className="form-group">
-                <label className="form-label">Pages</label>
-                <select name="pageRangeType" className="form-select mb-2" value={settings.pageRangeType} onChange={handleSettingsChange}>
-                  <option value="all">All Pages ({fileData?.pages})</option>
-                  <option value="custom">Custom Range</option>
-                </select>
-                {settings.pageRangeType === 'custom' && (
-                  <input type="text" name="customRange" placeholder="e.g. 1-3, 5" className="form-input" value={settings.customRange} onChange={handleSettingsChange} />
-                )}
-              </div>
-            )}
+            <div className="form-group">
+              <label className="form-label">Pages</label>
+              <select name="pageRangeType" className="form-select mb-2" value={settings.pageRangeType} onChange={handleSettingsChange}>
+                <option value="all">All Pages ({fileData?.pages})</option>
+                <option value="custom">Custom Range</option>
+              </select>
+              {settings.pageRangeType === 'custom' && (
+                <input type="text" name="customRange" placeholder="e.g. 1-3, 5" className="form-input" value={settings.customRange} onChange={handleSettingsChange} />
+              )}
+            </div>
 
-            {jobType === 'copy' && (
-              <p className="text-sm text-muted mt-2 mb-2">
-                <strong>Note:</strong> Pricing is based on 1 physical page. If you scan multiple pages through the ADF, you will only be charged for 1 page initially, but this is a demo.
-              </p>
-            )}
+
 
             <div className="price-card mt-2">
               <p className="text-sm opacity-80 mb-1">Total</p>

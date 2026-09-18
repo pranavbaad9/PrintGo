@@ -246,42 +246,36 @@ socket.on('physical_print_job', async (jobData) => {
   }
 });
 
-socket.on('physical_copy_job', async (jobData) => {
-  if (!jobData.jobId || !/^[a-zA-Z0-9_-]+$/.test(jobData.jobId)) {
-    console.error(`❌ REJECTED Copy Job: Invalid jobId format: ${jobData.jobId}`);
-    return;
-  }
-
+socket.on('start_adf_scan', async ({ sessionId }) => {
   console.log(`\n======================================================`);
-  console.log(`📥 NEW COPY JOB RECEIVED! [Job ID: ${jobData.jobId}]`);
+  console.log(`📥 NEW COPY SCAN REQUESTED! [Session ID: ${sessionId}]`);
   console.log(`======================================================`);
 
   try {
-    const scannedPdfPath = await scanAndCreatePDF(jobData.jobId);
-    console.log(`✅ Document scanned. Sending to printer...`);
-
-    const printOptions = {};
-    if (PRINTER_NAME) {
-      printOptions.printer = PRINTER_NAME;
-    }
+    const scanId = crypto.randomBytes(8).toString('hex');
+    const result = await scanAndCreatePDF(scanId);
     
-    if (jobData.settings) {
-      if (jobData.settings.copies) printOptions.copies = jobData.settings.copies;
-      if (jobData.settings.color === 'bw') printOptions.monochrome = true;
-      if (jobData.settings.duplex === 'double') printOptions.duplex = true;
-    }
+    console.log(`✅ Document scanned successfully (${result.pages} pages). Uploading to backend...`);
     
-    if (PRINTER_NAME) {
-      await ptp.print(scannedPdfPath, printOptions);
-      console.log(`🖨️  SUCCESS: Copy Job ${jobData.jobId} sent to Windows Print Spooler!`);
-      socket.emit('print_spooler_success', { jobId: jobData.jobId });
-      spoolerMonitor.startPollingJob(jobData.jobId, scannedPdfPath, socket);
-    } else {
-      spoolerMonitor.startPollingJob(jobData.jobId, scannedPdfPath, socket);
-    }
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('file', fs.createReadStream(result.pdfPath));
+    form.append('sessionId', sessionId);
+    
+    await axios.post(`${BACKEND_URL}/api/upload`, form, {
+      headers: {
+        ...form.getHeaders(),
+        'x-machine-key': MACHINE_KEY
+      }
+    });
+    
+    console.log(`✅ Upload complete for session ${sessionId}. Cloud will handle payment and printing.`);
+    
+    // Clean up local temp file
+    fs.unlinkSync(result.pdfPath);
   } catch (error) {
-    console.error(`❌ ERROR processing Copy Job ${jobData.jobId}:`, error.message);
-    socket.emit('print_spooler_error', { jobId: jobData.jobId, error: error.message });
+    console.error(`❌ ERROR during ADF Scan:`, error.message);
+    // You could emit an error back to the session if desired
   }
 });
 

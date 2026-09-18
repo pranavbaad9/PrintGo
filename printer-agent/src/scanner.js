@@ -13,11 +13,9 @@ if (!fs.existsSync(SCAN_DIR)) {
 
 /**
  * Executes a PowerShell WIA script to scan from the default scanner ADF
- * Returns the path to the scanned JPEG.
+ * Returns an array of paths to the scanned JPEGs.
  */
 async function scanDocument(jobId) {
-  const outputPath = path.join(SCAN_DIR, `${jobId}_scan.jpg`);
-  
   // WIA PowerShell script to trigger the scanner without GUI
   const psScript = `
     $ErrorActionPreference = "Stop"
@@ -29,32 +27,31 @@ async function scanDocument(jobId) {
         exit 1
       }
       
-      # Connect to the first scanner
       $device = $deviceManager.DeviceInfos.Item(1).Connect()
-      
-      # 1 = WIA_INTENT_NONE, 2 = Color, 3 = Grayscale
-      # Using Color by default for now
-      
       $item = $device.Items.Item(1)
       
-      # WIA_DPS_DOCUMENT_HANDLING_SELECT = 3088
-      # 1 = Feeder (ADF), 2 = Flatbed
       try {
         $prop = $device.Properties | Where-Object { $_.PropertyID -eq 3088 }
-        if ($prop) { $prop.Value = 1 }
+        if ($prop) { $prop.Value = 1 } # 1 = Feeder (ADF)
       } catch {
-        # Ignore if property not supported
+        # Ignore
       }
 
       Write-Host "Starting scan..."
-      $image = $item.Transfer()
-      
-      if (Test-Path "${outputPath}") {
-        Remove-Item "${outputPath}"
+      $pageCount = 1
+      while ($true) {
+        try {
+          $image = $item.Transfer()
+          $outputPath = "${SCAN_DIR}\\${jobId}_scan_temp_$pageCount.jpg"
+          if (Test-Path $outputPath) { Remove-Item $outputPath }
+          $image.SaveFile($outputPath)
+          Write-Host "Scanned page $pageCount"
+          $pageCount++
+        } catch {
+          Write-Host "ADF Empty or scan complete."
+          break
+        }
       }
-      
-      $image.SaveFile("${outputPath}")
-      Write-Host "Scan completed: ${outputPath}"
     } catch {
       Write-Error $_.Exception.Message
       exit 1
@@ -69,13 +66,22 @@ async function scanDocument(jobId) {
     console.log(stdout);
     if (stderr) console.error(stderr);
     
-    // Clean up script
     fs.unlinkSync(scriptPath);
     
-    if (fs.existsSync(outputPath)) {
-      return outputPath;
+    // Find all generated images
+    const files = fs.readdirSync(SCAN_DIR)
+      .filter(f => f.startsWith(`${jobId}_scan_temp_`) && f.endsWith('.jpg'))
+      .sort((a, b) => {
+        // extract page number
+        const numA = parseInt(a.match(/_scan_temp_(\\d+)\\.jpg/)[1]);
+        const numB = parseInt(b.match(/_scan_temp_(\\d+)\\.jpg/)[1]);
+        return numA - numB;
+      });
+
+    if (files.length > 0) {
+      return files.map(f => path.join(SCAN_DIR, f));
     } else {
-      throw new Error('Scan file was not generated.');
+      throw new Error('No pages were scanned. ADF might be empty.');
     }
   } catch (err) {
     console.error('Scanning failed:', err);
@@ -90,33 +96,35 @@ async function scanDocument(jobId) {
 async function scanAndCreatePDF(jobId) {
   try {
     console.log(`[Scanner] Initiating scan for job ${jobId}...`);
-    const jpgPath = await scanDocument(jobId);
+    const jpgPaths = await scanDocument(jobId);
     
-    console.log(`[Scanner] Creating PDF from scan...`);
+    console.log(`[Scanner] Creating PDF from ${jpgPaths.length} scanned pages...`);
     const pdfDoc = await PDFDocument.create();
     
-    const imageBytes = fs.readFileSync(jpgPath);
-    const image = await pdfDoc.embedJpg(imageBytes);
-    
-    const { width, height } = image.scale(1);
-    const page = pdfDoc.addPage([width, height]);
-    
-    page.drawImage(image, {
-      x: 0,
-      y: 0,
-      width,
-      height
-    });
+    for (const jpgPath of jpgPaths) {
+      const imageBytes = fs.readFileSync(jpgPath);
+      const image = await pdfDoc.embedJpg(imageBytes);
+      
+      const { width, height } = image.scale(1);
+      const page = pdfDoc.addPage([width, height]);
+      
+      page.drawImage(image, {
+        x: 0,
+        y: 0,
+        width,
+        height
+      });
+      
+      // Clean up JPG after embedding
+      fs.unlinkSync(jpgPath);
+    }
     
     const pdfBytes = await pdfDoc.save();
     const pdfPath = path.join(SCAN_DIR, `${jobId}_copy.pdf`);
     fs.writeFileSync(pdfPath, pdfBytes);
     
-    // Clean up JPG
-    fs.unlinkSync(jpgPath);
-    
     console.log(`[Scanner] PDF created at ${pdfPath}`);
-    return pdfPath;
+    return { pdfPath, pages: jpgPaths.length };
   } catch (error) {
     console.error(`[Scanner] Error during scan to PDF:`, error);
     throw error;
