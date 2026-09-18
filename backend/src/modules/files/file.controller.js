@@ -14,7 +14,7 @@ const serveDocument = async (req, res, next) => {
     
     // Find the document and its associated print job
     const document = await prisma.document.findFirst({
-      where: { filename },
+      where: { filename: { endsWith: filename } },
       include: {
         printJob: {
           include: {
