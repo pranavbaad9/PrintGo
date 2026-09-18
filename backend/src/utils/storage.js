@@ -6,9 +6,10 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('./logger');
 
-const useS3 = process.env.NODE_ENV === 'production' || !!process.env.AWS_S3_BUCKET;
+// Only use S3 if the bucket is explicitly configured, regardless of environment
+const useS3 = !!process.env.AWS_S3_BUCKET;
 
-if (useS3 && (!process.env.AWS_S3_BUCKET || !process.env.AWS_REGION)) {
+if (useS3 && !process.env.AWS_REGION) {
   logger.warn('WARNING: Running in S3 mode but AWS credentials or bucket are missing from .env!');
 }
 
