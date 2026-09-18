@@ -124,6 +124,51 @@ try {
 }
 
 const port = process.env.PORT || 5000;
-server.listen(port, () => {
-  logger.info(`Enterprise PrintGo backend running at http://localhost:${port}`);
+
+// Auto-seed database on startup for fresh deployments
+const autoSeed = async () => {
+  try {
+    const prisma = require('./utils/prisma');
+    
+    // Seed Machine
+    const machineKey = "new_rotated_machine_key_1a2b3c4d5e6f";
+    const existingMachine = await prisma.machine.findUnique({ where: { machineKey }});
+    if (!existingMachine) {
+      await prisma.machine.create({
+        data: {
+          name: 'Main Shop Printer',
+          location: 'Front Desk',
+          type: 'KIOSK',
+          machineKey: machineKey,
+          status: 'ACTIVE',
+        }
+      });
+      logger.info('✅ Auto-seeded default machine!');
+    }
+
+    // Seed Admin
+    const existingAdmin = await prisma.user.findUnique({ where: { email: 'admin@printgo.in' }});
+    if (!existingAdmin) {
+      const bcrypt = require('bcryptjs');
+      const hashedPassword = await bcrypt.hash('pg_admin_P#9xK2m$Q', 10);
+      await prisma.user.create({
+        data: {
+          name: 'PrintGo Admin',
+          email: 'admin@printgo.in',
+          password: hashedPassword,
+          role: 'SUPERADMIN',
+          phone: '9999999999'
+        }
+      });
+      logger.info('✅ Auto-seeded superadmin!');
+    }
+  } catch (error) {
+    logger.error('Error during auto-seed:', error);
+  }
+};
+
+autoSeed().then(() => {
+  server.listen(port, () => {
+    logger.info(`Enterprise PrintGo backend running at http://localhost:${port}`);
+  });
 });
