@@ -14,7 +14,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'https://printgo-ssoi.onrender.c
 const MobileView = () => {
   const { sessionId } = useParams();
   const [socket, setSocket] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
+  const [isConnected, setIsConnected] = useState(true);
   const [step, setStep] = useState(1);
   const [fileData, setFileData] = useState(null);
   const [jobId, setJobId] = useState(null);
@@ -79,6 +79,7 @@ const MobileView = () => {
               .catch(err => console.error('Failed to fetch Kiosk public key:', err));
           }
           newSocket.on('disconnect', () => setIsConnected(false));
+          newSocket.on('connect_error', () => setIsConnected(false));
 
           newSocket.on('kiosk_payment_success', ({ jobId: j }) => { setJobId(j); setStep(4); });
           newSocket.on('session_cancelled', () => {

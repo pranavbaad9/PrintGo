@@ -13,7 +13,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'https://printgo-ssoi.onrender.c
 const KioskView = () => {
   const [sessionId, setSessionId] = useState('');
   const [socket, setSocket] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
+  const [isConnected, setIsConnected] = useState(true);
   const [step, setStep] = useState(1);
   const [fileData, setFileData] = useState(null);
   const [settingsData, setSettingsData] = useState(null);
@@ -49,6 +49,7 @@ const KioskView = () => {
             newSocket.emit('join_session', code);
           });
           newSocket.on('disconnect', () => setIsConnected(false));
+          newSocket.on('connect_error', () => setIsConnected(false));
 
           newSocket.on('kiosk_user_connected', () => setStep(prev => prev < 2 ? 2 : prev));
           newSocket.on('kiosk_file_uploaded', (data) => { setFileData(data); setStep(3); });
