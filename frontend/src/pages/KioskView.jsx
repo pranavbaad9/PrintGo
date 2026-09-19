@@ -120,19 +120,53 @@ const KioskView = () => {
   return (
     <div style={{ minHeight: '70vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', position: 'relative' }}>
       {!isConnected && (
-        <div className="animate-fade-in" style={{ position: 'fixed', top: '1.5rem', left: '50%', transform: 'translateX(-50%)', background: 'var(--error-500)', color: 'white', padding: '0.75rem 1.5rem', borderRadius: 'var(--radius-full)', display: 'flex', alignItems: 'center', gap: '0.75rem', zIndex: 9999, boxShadow: '0 10px 25px rgba(239, 68, 68, 0.4)' }}>
-          <WifiOff size={18} />
-          <span style={{ fontSize: '1rem', fontWeight: 600 }}>Offline Mode. Reconnecting...</span>
+        <div className="animate-fade-in" style={{ position: 'fixed', top: '1.5rem', left: '50%', transform: 'translateX(-50%)', background: 'var(--warning-50)', color: 'var(--warning-600)', padding: '0.75rem 1.5rem', borderRadius: 'var(--radius-full)', display: 'flex', alignItems: 'center', gap: '0.75rem', zIndex: 9999, border: '1px solid var(--warning-500)', boxShadow: '0 10px 25px rgba(245, 158, 11, 0.15)' }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--warning-500)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+          <span style={{ fontSize: '1rem', fontWeight: 600 }}>Connection interrupted. Reconnecting...</span>
         </div>
       )}
       
       {/* Step Indicator */}
-      <div className="flex gap-2 align-center" style={{ marginBottom: '2rem' }}>
-        {[1, 2, 3, 4, 5].map((s) => (
-          <div
-            key={s}
-            className={`step-dot ${step === s ? 'active' : ''} ${step > s ? 'completed' : ''}`}
-          />
+      <div className="flex align-center justify-center w-full max-w-md mx-auto mb-10">
+        {[1, 2, 3, 4, 5].map((s, idx) => (
+          <React.Fragment key={s}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 'bold',
+                fontSize: '0.875rem',
+                transition: 'all 0.3s ease',
+                width: 32,
+                height: 32,
+                flexShrink: 0,
+                borderRadius: '50%',
+                background: step > s ? 'var(--success-500)' : step === s ? 'var(--primary-500)' : 'var(--gray-200)',
+                color: step > s || step === s ? 'white' : 'var(--gray-500)',
+                boxShadow: step === s ? '0 0 0 4px var(--primary-100)' : 'none'
+              }}
+            >
+              {step > s ? '✓' : s}
+            </div>
+            {idx < 4 && (
+              <div
+                style={{
+                  flex: 1,
+                  height: 4,
+                  margin: '0 0.5rem',
+                  borderRadius: 2,
+                  transition: 'all 0.5s ease',
+                  background: step > s + 1 
+                    ? 'var(--success-500)' 
+                    : step > s
+                    ? 'var(--primary-300)'
+                    : 'var(--gray-200)',
+                  boxShadow: step > s ? '0 0 8px rgba(99,102,241,0.2)' : 'none'
+                }}
+              />
+            )}
+          </React.Fragment>
         ))}
       </div>
       

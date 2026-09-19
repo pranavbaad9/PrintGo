@@ -16,13 +16,50 @@ export const Step1Scan = ({ mobileUrl }) => (
       </p>
     </div>
 
-    <div className="qr-container" style={{ marginBottom: '2rem' }}>
-      <QRCodeSVG value={mobileUrl} size={260} level="H" />
+    <div style={{ position: 'relative', display: 'inline-block', marginBottom: '3rem', marginTop: '1rem' }}>
+      {/* Ambient glowing background pulse */}
+      <div 
+        style={{
+          position: 'absolute',
+          inset: -20,
+          background: 'var(--primary-200)',
+          borderRadius: 'var(--radius-full)',
+          filter: 'blur(30px)',
+          opacity: 0.5,
+          animation: 'pulse 3s ease-in-out infinite'
+        }}
+      />
+      {/* The QR Container itself doesn't distort */}
+      <div 
+        style={{
+          padding: '2rem',
+          background: 'white',
+          borderRadius: 'var(--radius-2xl)',
+          boxShadow: 'var(--shadow-xl), 0 0 0 1px var(--gray-100)',
+          position: 'relative',
+          zIndex: 10,
+        }}
+      >
+        <QRCodeSVG value={mobileUrl} size={280} level="H" />
+        
+        {/* Scanning Line overlay inside the white card but over the QR */}
+        <div style={{
+          position: 'absolute',
+          top: '2rem',
+          left: '2rem',
+          right: '2rem',
+          height: 2,
+          background: 'var(--primary-500)',
+          boxShadow: '0 0 10px 2px var(--primary-400)',
+          animation: 'scanLine 3s ease-in-out infinite',
+          zIndex: 20
+        }} />
+      </div>
     </div>
 
-    <div className="flex align-center justify-center gap-3" style={{ color: 'var(--text-muted)' }}>
-      <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--primary-color)', animation: 'pulse 1.5s ease-in-out infinite' }} />
-      <p className="text-sm font-medium">Waiting for connection...</p>
+    <div className="flex align-center justify-center gap-3 animate-slide-up" style={{ color: 'var(--text-main)', background: 'white', padding: '0.75rem 1.5rem', borderRadius: 'var(--radius-full)', display: 'inline-flex', boxShadow: 'var(--shadow-sm)' }}>
+      <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--primary-color)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+      <p className="text-sm font-semibold">Waiting for connection...</p>
     </div>
   </div>
 );

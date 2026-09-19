@@ -350,18 +350,30 @@ const MobileView = () => {
     switch (step) {
       case 1:
         return (
-          <Card glass className="text-center animate-fade-in mt-4">
-            <div style={{ display: 'inline-flex', background: 'var(--primary-50)', borderRadius: '50%', padding: '1rem', marginBottom: '1rem' }}>
-              <Upload size={32} style={{ color: 'var(--primary-color)' }} />
-            </div>
-            <h2 className="text-2xl font-bold mb-2">Upload Document</h2>
-            <p className="text-muted mb-6">Select a file from your phone to print</p>
+          <Card glass className="text-center animate-fade-in mt-4 border-2 border-dashed border-gray-200">
+            <div className="py-6">
+              <div style={{ display: 'inline-flex', background: 'var(--primary-50)', borderRadius: '50%', padding: '1.25rem', marginBottom: '1.25rem' }}>
+                <Upload size={36} style={{ color: 'var(--primary-color)' }} className={uploading ? 'animate-bounce' : ''} />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Upload Document</h2>
+              <p className="text-muted mb-8 text-sm">Select a file from your phone to print</p>
 
-            <label className="btn btn-primary w-full" style={{ display: 'flex', cursor: 'pointer', padding: '0.875rem', fontSize: '1rem' }}>
-              {uploading ? <><Loader size={18} className="animate-spin" /> Uploading...</> : 'Choose File'}
-              <input type="file" style={{ display: 'none' }} onChange={handleFileUpload} disabled={uploading} />
-            </label>
-            <p className="text-xs text-muted mt-3">Supports PDF, DOCX, PPTX, JPG, PNG</p>
+              {uploading ? (
+                <div className="w-full max-w-xs mx-auto animate-scale-in">
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-2 relative">
+                    <div className="absolute top-0 left-0 h-full bg-primary-500 rounded-full animate-[pulse_2s_ease-in-out_infinite]" style={{ width: '80%', transition: 'width 0.3s' }}></div>
+                  </div>
+                  <p className="text-sm font-semibold text-primary-500">Uploading...</p>
+                </div>
+              ) : (
+                <label className="btn btn-primary w-full max-w-xs mx-auto" style={{ display: 'flex', cursor: 'pointer', padding: '1rem', fontSize: '1.05rem', borderRadius: 'var(--radius-lg)' }}>
+                  Choose File
+                  <input type="file" style={{ display: 'none' }} onChange={handleFileUpload} disabled={uploading} />
+                </label>
+              )}
+              
+              {!uploading && <p className="text-xs text-muted mt-5 opacity-70">Supports PDF, DOCX, PPTX, JPG, PNG</p>}
+            </div>
           </Card>
         );
       case 2:
@@ -374,78 +386,118 @@ const MobileView = () => {
               <h2 className="text-xl font-bold">Print Settings</h2>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Color Mode</label>
-              <select name="color" className="form-select" value={settings.color} onChange={handleSettingsChange}>
-                <option value="bw">Black & White (₹2/side)</option>
-                <option value="color">Color (₹10/side)</option>
-              </select>
+            <div className="form-group mb-5">
+              <label className="form-label mb-2 block">Color Mode</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className={`selection-card ${settings.color === 'bw' ? 'selected' : ''}`} onClick={() => setSettings(p => ({ ...p, color: 'bw' }))}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-bold text-sm">Black & White</p>
+                      <p className="text-xs text-muted mt-1">₹2 / side</p>
+                    </div>
+                    {settings.color === 'bw' && <CheckCircle size={16} className="text-primary-500 animate-scale-in" />}
+                  </div>
+                </div>
+                <div className={`selection-card ${settings.color === 'color' ? 'selected' : ''}`} onClick={() => setSettings(p => ({ ...p, color: 'color' }))}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-bold text-sm">Color</p>
+                      <p className="text-xs text-muted mt-1">₹10 / side</p>
+                    </div>
+                    {settings.color === 'color' && <CheckCircle size={16} className="text-primary-500 animate-scale-in" />}
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="flex gap-3">
-              <div className="form-group flex-1">
-                <label className="form-label">Sides</label>
-                <select name="duplex" className="form-select" value={settings.duplex} onChange={handleSettingsChange}>
-                  <option value="single">Single</option>
-                  <option value="double">Double (₹3/sheet)</option>
-                </select>
-              </div>
-              <div className="form-group" style={{ width: 90 }}>
-                <label className="form-label">Copies</label>
-                <input type="number" name="copies" className="form-input text-center" min="1" max="100" value={settings.copies} onChange={handleSettingsChange} />
+            <div className="form-group mb-5">
+              <label className="form-label mb-2 block">Sides</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className={`selection-card ${settings.duplex === 'single' ? 'selected' : ''}`} onClick={() => setSettings(p => ({ ...p, duplex: 'single' }))}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-bold text-sm">Single Sided</p>
+                    </div>
+                    {settings.duplex === 'single' && <CheckCircle size={16} className="text-primary-500 animate-scale-in" />}
+                  </div>
+                </div>
+                <div className={`selection-card ${settings.duplex === 'double' ? 'selected' : ''}`} onClick={() => setSettings(p => ({ ...p, duplex: 'double' }))}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-bold text-sm">Double Sided</p>
+                      <p className="text-xs text-muted mt-1">₹3 / sheet</p>
+                    </div>
+                    {settings.duplex === 'double' && <CheckCircle size={16} className="text-primary-500 animate-scale-in" />}
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Pages</label>
-              <select name="pageRangeType" className="form-select mb-2" value={settings.pageRangeType} onChange={handleSettingsChange}>
-                <option value="all">All Pages ({fileData?.pages})</option>
-                <option value="custom">Custom Range</option>
-              </select>
+            <div className="form-group mb-5">
+              <label className="form-label mb-2 block">Copies</label>
+              <div className="flex items-center gap-4">
+                <button className="btn rounded-full w-12 h-12 flex items-center justify-center text-xl pb-1" onClick={() => setSettings(p => ({ ...p, copies: Math.max(1, p.copies - 1) }))}>−</button>
+                <div className="text-2xl font-bold flex-1 text-center">{settings.copies}</div>
+                <button className="btn rounded-full w-12 h-12 flex items-center justify-center text-xl pb-1" onClick={() => setSettings(p => ({ ...p, copies: Math.min(100, p.copies + 1) }))}>+</button>
+              </div>
+            </div>
+
+            <div className="form-group mb-5">
+              <label className="form-label mb-2 block">Pages</label>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <div className={`selection-card ${settings.pageRangeType === 'all' ? 'selected' : ''}`} onClick={() => setSettings(p => ({ ...p, pageRangeType: 'all' }))}>
+                  <p className="font-bold text-sm text-center">All ({fileData?.pages})</p>
+                </div>
+                <div className={`selection-card ${settings.pageRangeType === 'custom' ? 'selected' : ''}`} onClick={() => setSettings(p => ({ ...p, pageRangeType: 'custom' }))}>
+                  <p className="font-bold text-sm text-center">Custom Range</p>
+                </div>
+              </div>
               {settings.pageRangeType === 'custom' && (
-                <input type="text" name="customRange" placeholder="e.g. 1-3, 5" className="form-input" value={settings.customRange} onChange={handleSettingsChange} />
+                <input type="text" name="customRange" placeholder="e.g. 1-3, 5" className="form-input animate-slide-up" value={settings.customRange} onChange={handleSettingsChange} />
               )}
             </div>
 
-            <div className="price-card mt-2">
-              <p className="text-sm opacity-80 mb-1">Total</p>
-              <p className="text-4xl font-extrabold mb-3">₹{price}</p>
+            <div className="price-card animate-scale-in" style={{ marginTop: '1.5rem', padding: '1.5rem', background: 'var(--primary-gradient)', borderRadius: 'var(--radius-xl)' }}>
+              <p className="text-sm opacity-90 font-semibold tracking-wide uppercase mb-1">Total</p>
+              <p key={price} className="text-5xl font-extrabold animate-slide-up">₹{price.toFixed(2)}</p>
               <button 
-                className="btn w-full font-bold" 
-                style={{ background: 'white', color: 'var(--primary-color)', border: 'none', display: 'flex', justifyContent: 'center' }} 
+                className="btn w-full font-bold mt-4" 
+                style={{ background: 'white', color: 'var(--primary-color)', border: 'none', display: 'flex', justifyContent: 'center', padding: '1rem', borderRadius: 'var(--radius-lg)' }} 
                 onClick={handlePrintSettingsSubmit}
                 disabled={isSubmittingSettings}
               >
-                {isSubmittingSettings ? <><Loader size={18} className="animate-spin mr-2" /> Processing...</> : 'Proceed to Payment'}
+                {isSubmittingSettings ? <><Loader size={20} className="animate-spin mr-2" /> Processing...</> : 'Proceed to Payment'}
               </button>
             </div>
           </Card>
         );
       case 3:
         return (
-          <Card glass className="text-center animate-fade-in mt-4 py-8">
-            <div style={{ display: 'inline-flex', background: 'var(--primary-50)', borderRadius: '50%', padding: '1rem', marginBottom: '1.25rem' }}>
-              <CreditCard size={36} style={{ color: 'var(--primary-color)' }} />
+          <Card glass className="text-center animate-scale-in mt-4 py-8 border-none" style={{ boxShadow: 'var(--shadow-lg)' }}>
+            <div style={{ display: 'inline-flex', background: 'var(--primary-50)', borderRadius: '50%', padding: '1.25rem', marginBottom: '1.5rem', border: '1px solid var(--primary-100)' }}>
+              <CreditCard size={40} style={{ color: 'var(--primary-600)' }} />
             </div>
-            <h2 className="text-2xl font-bold mb-2">Payment Required</h2>
-            <p className="text-muted mb-6">Total: <strong className="text-main text-xl">₹{price}</strong></p>
+            <h2 className="text-3xl font-extrabold mb-2" style={{ letterSpacing: '-0.02em' }}>Payment Required</h2>
+            <p className="text-muted mb-8 font-medium">Total Amount: <span className="text-2xl text-primary-600 font-extrabold ml-1">₹{price.toFixed(2)}</span></p>
 
-            <Button className="w-full text-lg py-3" onClick={handleCashfreePayment} disabled={isInitializingPayment} style={{ display: 'flex', justifyContent: 'center' }}>
-              {isInitializingPayment ? <><Loader size={20} className="animate-spin mr-2" /> Loading...</> : 'Pay Securely'}
+            <Button className="w-full text-lg py-4 rounded-xl font-bold shadow-md" onClick={handleCashfreePayment} disabled={isInitializingPayment} style={{ display: 'flex', justifyContent: 'center', background: 'var(--primary-gradient)' }}>
+              {isInitializingPayment ? <><Loader size={22} className="animate-spin mr-2" /> Loading securely...</> : 'Pay Securely'}
             </Button>
           </Card>
         );
       case 4:
         return (
-          <Card glass className="text-center animate-fade-in mt-4 py-8">
-            <div className="success-circle">
-              <CheckCircle size={48} style={{ color: 'var(--success-500)' }} />
+          <Card glass className="text-center animate-scale-in mt-4 py-10 border-none" style={{ boxShadow: 'var(--shadow-lg)' }}>
+            <div className="success-circle" style={{ width: 100, height: 100, marginBottom: '2rem' }}>
+              <CheckCircle size={56} style={{ color: 'var(--success-500)' }} />
             </div>
-            <h2 className="text-2xl font-bold mb-2">Payment Successful</h2>
-            <p className="text-muted">Your document is now in the print queue.</p>
-            <p className="font-semibold mt-4" style={{ color: 'var(--primary-color)' }}>
-              Check the Kiosk screen for status
-            </p>
+            <h2 className="text-3xl font-extrabold mb-3" style={{ letterSpacing: '-0.02em' }}>Payment Successful</h2>
+            <p className="text-lg text-muted font-medium mb-2">Your document is now in the print queue.</p>
+            <div className="inline-flex mt-6" style={{ background: 'var(--primary-50)', padding: '0.75rem 1.25rem', borderRadius: 'var(--radius-lg)' }}>
+              <p className="font-bold text-sm" style={{ color: 'var(--primary-700)' }}>
+                Please check the Kiosk screen
+              </p>
+            </div>
           </Card>
         );
       default: return null;
@@ -455,9 +507,9 @@ const MobileView = () => {
   return (
     <div style={{ padding: '1rem', maxWidth: 480, margin: '0 auto', width: '100%', position: 'relative' }}>
       {!isConnected && (
-        <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', background: 'var(--error-500)', color: 'white', padding: '0.5rem 1rem', borderRadius: 'var(--radius-full)', display: 'flex', alignItems: 'center', gap: '0.5rem', zIndex: 50, width: 'max-content', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)' }}>
-          <WifiOff size={16} />
-          <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Offline Mode</span>
+        <div className="animate-slide-up" style={{ position: 'fixed', top: '1rem', left: '1rem', right: '1rem', background: 'var(--warning-50)', border: '1px solid var(--warning-200)', color: 'var(--warning-700)', padding: '0.75rem 1rem', borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', gap: '0.75rem', zIndex: 100, boxShadow: 'var(--shadow-md)' }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--warning-500)', animation: 'pulse 1.5s ease-in-out infinite', flexShrink: 0 }} />
+          <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>Connection interrupted. Reconnecting...</span>
         </div>
       )}
       {error && (
