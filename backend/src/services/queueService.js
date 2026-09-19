@@ -52,10 +52,13 @@ const processJob = async (shortId) => {
           jobId: updatedJob.shortId,
           fileUrl: updatedJob.document ? updatedJob.document.filename : '', 
           originalName: updatedJob.document ? updatedJob.document.originalName : '',
+          pagesToPrint: updatedJob.pagesToPrint,
           settings: {
             color: updatedJob.color,
             duplex: updatedJob.duplex,
-            copies: updatedJob.copies
+            copies: updatedJob.copies,
+            pageRangeType: updatedJob.pageRangeType,
+            customRange: updatedJob.customRange
           },
           price: updatedJob.cost,
           encryptedKey: updatedJob.encryptedKey,
