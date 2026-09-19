@@ -370,6 +370,38 @@ h1, h2, h3, h4, h5, h6 {
   50% { opacity: 0.5; }
 }
 
+/* Premium Selection Card */
+.selection-card {
+  border: 1px solid var(--gray-200);
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--ease-out);
+  position: relative;
+  overflow: hidden;
+}
+
+.selection-card:hover {
+  border-color: var(--primary-300);
+  background: var(--gray-50);
+}
+
+.selection-card.selected {
+  border-color: var(--primary-500);
+  background: var(--primary-50);
+  box-shadow: 0 0 0 1px var(--primary-500);
+}
+
+.selection-card.selected::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border: 2px solid var(--primary-500);
+  border-radius: var(--radius-lg);
+  animation: scaleIn 0.2s var(--ease-out);
+}
+
 /* Stagger children animation */
 .stagger-children > * {
   opacity: 0;
@@ -718,69 +750,67 @@ footer a:hover {
 
 @media (min-width: 1400px) {
   .container { max-width: 1320px; }
+/* --- Animations --- */
+@keyframes slideUp {
+    0% { opacity: 0; transform: translateY(12px) scale(0.98); }
+    100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
- / *   - - -   A n i m a t i o n s   - - -   * / 
- @ k e y f r a m e s   s l i d e U p   { 
-     0 %   {   o p a c i t y :   0 ;   t r a n s f o r m :   t r a n s l a t e Y ( 1 2 p x )   s c a l e ( 0 . 9 8 ) ;   } 
-     1 0 0 %   {   o p a c i t y :   1 ;   t r a n s f o r m :   t r a n s l a t e Y ( 0 )   s c a l e ( 1 ) ;   } 
- } 
- 
- @ k e y f r a m e s   s c a l e I n   { 
-     0 %   {   o p a c i t y :   0 ;   t r a n s f o r m :   s c a l e ( 0 . 9 ) ;   } 
-     1 0 0 %   {   o p a c i t y :   1 ;   t r a n s f o r m :   s c a l e ( 1 ) ;   } 
- } 
- 
- @ k e y f r a m e s   d r a w C h e c k   { 
-     0 %   {   s t r o k e - d a s h a r r a y :   0 ,   1 0 0 ;   } 
-     1 0 0 %   {   s t r o k e - d a s h a r r a y :   1 0 0 ,   1 0 0 ;   } 
- } 
- 
- . a n i m a t e - s l i d e - u p   { 
-     a n i m a t i o n :   s l i d e U p   v a r ( - - d u r a t i o n - s l o w )   v a r ( - - e a s e - s p r i n g )   f o r w a r d s ; 
- } 
- 
- . a n i m a t e - s c a l e - i n   { 
-     a n i m a t i o n :   s c a l e I n   v a r ( - - d u r a t i o n - n o r m a l )   v a r ( - - e a s e - s p r i n g )   f o r w a r d s ; 
- } 
- 
- . a n i m a t e - d r a w - c h e c k   { 
-     a n i m a t i o n :   d r a w C h e c k   0 . 5 s   v a r ( - - e a s e - o u t )   f o r w a r d s ; 
- } 
- 
- / *   P r e m i u m   S e l e c t i o n   C a r d   * / 
- . s e l e c t i o n - c a r d   { 
-     b o r d e r :   1 p x   s o l i d   v a r ( - - g r a y - 2 0 0 ) ; 
-     b a c k g r o u n d :   w h i t e ; 
-     b o r d e r - r a d i u s :   v a r ( - - r a d i u s - l g ) ; 
-     p a d d i n g :   1 r e m ; 
-     c u r s o r :   p o i n t e r ; 
-     t r a n s i t i o n :   a l l   v a r ( - - d u r a t i o n - n o r m a l )   v a r ( - - e a s e - o u t ) ; 
-     p o s i t i o n :   r e l a t i v e ; 
-     o v e r f l o w :   h i d d e n ; 
- } 
- 
- . s e l e c t i o n - c a r d : h o v e r   { 
-     b o r d e r - c o l o r :   v a r ( - - p r i m a r y - 3 0 0 ) ; 
-     b a c k g r o u n d :   v a r ( - - g r a y - 5 0 ) ; 
- } 
- 
- . s e l e c t i o n - c a r d . s e l e c t e d   { 
-     b o r d e r - c o l o r :   v a r ( - - p r i m a r y - 5 0 0 ) ; 
-     b a c k g r o u n d :   v a r ( - - p r i m a r y - 5 0 ) ; 
-     b o x - s h a d o w :   0   0   0   1 p x   v a r ( - - p r i m a r y - 5 0 0 ) ; 
- } 
- 
- . s e l e c t i o n - c a r d . s e l e c t e d : : b e f o r e   { 
-     c o n t e n t :   ' ' ; 
-     p o s i t i o n :   a b s o l u t e ; 
-     t o p :   0 ;   l e f t :   0 ;   r i g h t :   0 ;   b o t t o m :   0 ; 
-     b o r d e r :   2 p x   s o l i d   v a r ( - - p r i m a r y - 5 0 0 ) ; 
-     b o r d e r - r a d i u s :   v a r ( - - r a d i u s - l g ) ; 
-     a n i m a t i o n :   s c a l e I n   0 . 2 s   v a r ( - - e a s e - o u t ) ; 
- } 
-  
- /* --- Spacing Utilities --- */
+@keyframes scaleIn {
+    0% { opacity: 0; transform: scale(0.9); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes drawCheck {
+    0% { stroke-dasharray: 0, 100; }
+    100% { stroke-dasharray: 100, 100; }
+}
+
+.animate-slide-up {
+    animation: slideUp var(--duration-slow) var(--ease-spring) forwards;
+}
+
+.animate-scale-in {
+    animation: scaleIn var(--duration-normal) var(--ease-spring) forwards;
+}
+
+.animate-draw-check {
+    animation: drawCheck 0.5s var(--ease-out) forwards;
+}
+
+/* Premium Selection Card */
+.selection-card {
+    border: 1px solid var(--gray-200);
+    background: white;
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    cursor: pointer;
+    transition: all var(--duration-normal) var(--ease-out);
+    position: relative;
+    overflow: hidden;
+}
+
+.selection-card:hover {
+    border-color: var(--primary-300);
+    background: var(--gray-50);
+}
+
+.selection-card.selected {
+    border-color: var(--primary-500);
+    background: var(--primary-50);
+    box-shadow: 0 0 0 1px var(--primary-500);
+}
+
+.selection-card.selected::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    border: 2px solid var(--primary-500);
+    border-radius: var(--radius-lg);
+    animation: scaleIn 0.2s var(--ease-out);
+}
+
+/* --- Spacing Utilities --- */
 .m-0 { margin: 0; }
 .mt-1 { margin-top: 0.25rem; }
 .mt-2 { margin-top: 0.5rem; }
@@ -879,7 +909,6 @@ footer a:hover {
 .bg-primary-500 { background-color: var(--primary-500); }
 .text-primary-600 { color: var(--primary-600); }
 .text-success-600 { color: var(--success-600); }
-/* --- Additional Tailwind Shims --- */
 .text-white { color: white; }
 .bg-success-50 { background-color: var(--success-50); }
 .bg-success-500 { background-color: var(--success-500); }
