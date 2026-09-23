@@ -1,10 +1,10 @@
 import React from 'react';
 
 export const StepIndicator = ({ step }) => (
-  <div className="flex justify-center gap-2 align-center" style={{ padding: '1rem 0 0.5rem' }}>
+  <div className="flex justify-center gap-2 items-center" style={{ padding: '1rem 0 0.5rem' }}>
     {['Upload', 'Settings', 'Pay', 'Done'].map((label, i) => (
       <React.Fragment key={label}>
-        <div className="flex align-center gap-1" style={{ flexDirection: 'column' }}>
+        <div className="flex items-center gap-1" style={{ flexDirection: 'column' }}>
           <div style={{
             width: 28, height: 28, borderRadius: '50%',
             display: 'flex', alignItems: 'center', justifyContent: 'center',

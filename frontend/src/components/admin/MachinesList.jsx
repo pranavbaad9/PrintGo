@@ -6,8 +6,8 @@ import { Button } from '../ui/Button';
 
 export const MachinesList = ({ machines, onCreateTestMachine, onToggleMachineStatus }) => (
   <Card glass className="mt-6">
-    <div className="flex justify-between align-center mb-4">
-      <div className="flex align-center gap-2">
+    <div className="flex justify-between items-center mb-4">
+      <div className="flex items-center gap-2">
         <div className="stat-icon" style={{ background: 'var(--primary-50)', width: 32, height: 32 }}>
           <Printer size={16} style={{ color: 'var(--primary-color)' }} />
         </div>
@@ -23,13 +23,13 @@ export const MachinesList = ({ machines, onCreateTestMachine, onToggleMachineSta
         <p className="text-muted text-sm">No machines registered.</p>
       ) : (
         machines.map(machine => (
-          <div key={machine.id} className="job-row flex justify-between align-center" style={{ padding: '1rem', background: 'var(--gray-50)', borderRadius: 'var(--radius-md)' }}>
+          <div key={machine.id} className="job-row flex justify-between items-center" style={{ padding: '1rem', background: 'var(--gray-50)', borderRadius: 'var(--radius-md)' }}>
             <div>
               <p className="font-semibold text-md">{machine.name} - {machine.location || 'No Location'}</p>
               <p className="text-xs text-muted">Key: {machine.machineKey}</p>
               <p className="text-xs text-muted mt-1">Company: {machine.company?.name || 'N/A'}</p>
             </div>
-            <div className="flex align-center gap-4">
+            <div className="flex items-center gap-4">
               <Badge status={machine.status} />
               <Button 
                 onClick={() => onToggleMachineStatus(machine.id, machine.status)}

@@ -379,7 +379,7 @@ const MobileView = () => {
       case 2:
         return (
           <Card glass className="animate-fade-in mt-4">
-            <div className="flex align-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-4">
               <div style={{ background: 'var(--primary-50)', borderRadius: 'var(--radius-md)', padding: '6px', display: 'flex' }}>
                 <Settings size={20} style={{ color: 'var(--primary-color)' }} />
               </div>

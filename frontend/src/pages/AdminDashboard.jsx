@@ -149,7 +149,7 @@ const AdminDashboard = () => {
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto', width: '100%', padding: '1rem' }}>
       {/* Header */}
-      <div className="flex justify-between align-center mb-6" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
+      <div className="flex justify-between items-center mb-6" style={{ flexWrap: 'wrap', gap: '0.75rem' }}>
         <div>
           <h2 className="text-2xl font-bold">Enterprise Dashboard</h2>
           {printerStatus.isError ? (

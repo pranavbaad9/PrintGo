@@ -6,7 +6,7 @@ import { Button } from '../ui/Button';
 
 export const LivePrintQueue = ({ queue, onStatusChange }) => (
   <Card glass className="flex-col">
-    <div className="flex align-center gap-2 mb-4">
+    <div className="flex items-center gap-2 mb-4">
       <div className="stat-icon" style={{ background: 'var(--primary-50)', width: 32, height: 32 }}>
         <Printer size={16} style={{ color: 'var(--primary-color)' }} />
       </div>
@@ -26,7 +26,7 @@ export const LivePrintQueue = ({ queue, onStatusChange }) => (
               <p className="font-semibold text-sm">#{job.shortId || job.id} — {job.originalName}</p>
               <p className="text-xs text-muted">{job.copies || 1} copies · {job.color === 'color' ? 'Color' : 'B&W'}</p>
             </div>
-            <div className="flex align-center gap-2">
+            <div className="flex items-center gap-2">
               <Badge status={job.status} />
               <button onClick={() => onStatusChange(job.id, 'CANCELLED')} title="Cancel" className="btn" style={{ padding: '4px' }}>
                 <XCircle size={18} style={{ color: 'var(--error-500)' }} />

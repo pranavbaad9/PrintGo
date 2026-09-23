@@ -12,7 +12,7 @@ const Refunds = () => {
 
         {/* Cancellation Notice */}
         <div style={{ padding: '1.25rem', background: 'var(--warning-50)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(245,158,11,0.2)', marginBottom: '1.25rem' }}>
-          <div className="flex align-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2">
             <XCircle size={18} style={{ color: 'var(--warning-600)' }} />
             <h3 className="font-bold text-sm">Cancellations</h3>
           </div>
@@ -23,7 +23,7 @@ const Refunds = () => {
 
         {/* Refund Eligibility */}
         <div style={{ padding: '1.25rem', background: 'var(--gray-50)', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem' }}>
-          <div className="flex align-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-3">
             <RefreshCw size={18} style={{ color: 'var(--primary-color)' }} />
             <h3 className="font-bold text-sm">Refund Eligibility</h3>
           </div>
@@ -46,7 +46,7 @@ const Refunds = () => {
 
         {/* How to Request */}
         <div style={{ padding: '1.25rem', background: 'var(--primary-50)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(99,102,241,0.15)' }}>
-          <div className="flex align-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-2">
             <Mail size={18} style={{ color: 'var(--primary-color)' }} />
             <h3 className="font-bold text-sm">How to Request a Refund</h3>
           </div>

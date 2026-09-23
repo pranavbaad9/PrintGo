@@ -11,7 +11,7 @@ const ContactUs = () => {
         </p>
 
         <div className="stagger-children" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div className="flex align-center gap-3" style={{ padding: '1rem', background: 'var(--gray-50)', borderRadius: 'var(--radius-md)' }}>
+          <div className="flex items-center gap-3" style={{ padding: '1rem', background: 'var(--gray-50)', borderRadius: 'var(--radius-md)' }}>
             <div className="stat-icon" style={{ background: 'var(--primary-50)', width: 40, height: 40 }}>
               <Mail size={18} style={{ color: 'var(--primary-color)' }} />
             </div>
@@ -21,7 +21,7 @@ const ContactUs = () => {
             </div>
           </div>
 
-          <div className="flex align-center gap-3" style={{ padding: '1rem', background: 'var(--gray-50)', borderRadius: 'var(--radius-md)' }}>
+          <div className="flex items-center gap-3" style={{ padding: '1rem', background: 'var(--gray-50)', borderRadius: 'var(--radius-md)' }}>
             <div className="stat-icon" style={{ background: 'var(--success-50)', width: 40, height: 40 }}>
               <Phone size={18} style={{ color: 'var(--success-500)' }} />
             </div>
@@ -31,7 +31,7 @@ const ContactUs = () => {
             </div>
           </div>
 
-          <div className="flex align-center gap-3" style={{ padding: '1rem', background: 'var(--gray-50)', borderRadius: 'var(--radius-md)' }}>
+          <div className="flex items-center gap-3" style={{ padding: '1rem', background: 'var(--gray-50)', borderRadius: 'var(--radius-md)' }}>
             <div className="stat-icon" style={{ background: 'var(--warning-50)', width: 40, height: 40 }}>
               <Clock size={18} style={{ color: 'var(--warning-600)' }} />
             </div>
@@ -41,7 +41,7 @@ const ContactUs = () => {
             </div>
           </div>
 
-          <div className="flex align-center gap-3" style={{ padding: '1rem', background: 'var(--gray-50)', borderRadius: 'var(--radius-md)' }}>
+          <div className="flex items-center gap-3" style={{ padding: '1rem', background: 'var(--gray-50)', borderRadius: 'var(--radius-md)' }}>
             <div className="stat-icon" style={{ background: 'var(--error-50)', width: 40, height: 40 }}>
               <MapPin size={18} style={{ color: 'var(--error-500)' }} />
             </div>

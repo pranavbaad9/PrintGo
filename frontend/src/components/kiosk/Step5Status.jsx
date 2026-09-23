@@ -3,7 +3,7 @@ import { Loader, Printer, CheckCircle, FileText, AlertTriangle } from 'lucide-re
 import { Button } from '../ui/Button';
 
 export const Step5Status = ({ jobStatus, eta, formatEta }) => (
-  <div className="text-center animate-fade-in" style={{ maxWidth: 500, margin: '0 auto' }}>
+  <div className="text-center animate-fade-in" style={{ maxWidth: 500, margin: '0 auto', marginTop: '2rem' }}>
     {jobStatus === 'WAITING' && (
       <div className="animate-scale-in">
         <div style={{ display: 'inline-flex', background: 'var(--warning-50)', borderRadius: '50%', padding: '1.5rem', marginBottom: '1.5rem', border: '1px solid var(--warning-200)', position: 'relative' }}>

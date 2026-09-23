@@ -3,7 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Scan } from 'lucide-react';
 
 export const Step1Scan = ({ mobileUrl }) => (
-  <div className="text-center animate-fade-in" style={{ maxWidth: 600, margin: '0 auto' }}>
+  <div className="text-center animate-fade-in" style={{ maxWidth: 600, margin: '0 auto', marginTop: '2rem' }}>
     <div style={{ marginBottom: '2rem' }}>
       <div className="animate-float" style={{ display: 'inline-flex', padding: '1rem', background: 'var(--primary-50)', borderRadius: 'var(--radius-2xl)', marginBottom: '1.5rem' }}>
         <Scan size={48} style={{ color: 'var(--primary-color)' }} />
@@ -57,9 +57,11 @@ export const Step1Scan = ({ mobileUrl }) => (
       </div>
     </div>
 
-    <div className="flex align-center justify-center gap-3 animate-slide-up" style={{ color: 'var(--text-main)', background: 'white', padding: '0.75rem 1.5rem', borderRadius: 'var(--radius-full)', display: 'inline-flex', boxShadow: 'var(--shadow-sm)' }}>
-      <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--primary-color)', animation: 'pulse 1.5s ease-in-out infinite' }} />
-      <p className="text-sm font-semibold">Waiting for connection...</p>
+    <div>
+      <div className="flex items-center justify-center gap-3 animate-slide-up" style={{ color: 'var(--text-main)', background: 'white', padding: '0.75rem 1.5rem', borderRadius: 'var(--radius-full)', display: 'inline-flex', boxShadow: 'var(--shadow-sm)' }}>
+        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--primary-color)', animation: 'pulse 1.5s ease-in-out infinite' }} />
+        <p className="text-sm font-semibold">Waiting for connection...</p>
+      </div>
     </div>
   </div>
 );

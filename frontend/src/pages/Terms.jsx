@@ -44,7 +44,7 @@ const Terms = () => {
         <div className="stagger-children" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {sections.map((s) => (
             <div key={s.title} style={{ padding: '1.25rem', background: 'var(--gray-50)', borderRadius: 'var(--radius-md)', borderLeft: `3px solid ${s.color}` }}>
-              <div className="flex align-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-2">
                 <div className="stat-icon" style={{ background: s.bg, width: 32, height: 32 }}>
                   <s.icon size={16} style={{ color: s.color }} />
                 </div>

@@ -127,7 +127,7 @@ const KioskView = () => {
       )}
       
       {/* Step Indicator */}
-      <div className="flex align-center justify-center w-full max-w-md mx-auto mb-10">
+      <div className="flex items-center justify-center w-full max-w-md mx-auto mb-10">
         {[1, 2, 3, 4, 5].map((s, idx) => (
           <React.Fragment key={s}>
             <div

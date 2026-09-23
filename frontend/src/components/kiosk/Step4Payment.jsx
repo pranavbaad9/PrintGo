@@ -3,7 +3,7 @@ import { Card } from '../ui/Card';
 import { ShieldCheck } from 'lucide-react';
 
 export const Step4Payment = ({ price, jobId }) => (
-  <div className="text-center animate-fade-in" style={{ maxWidth: 500, margin: '0 auto' }}>
+  <div className="text-center animate-fade-in" style={{ maxWidth: 500, margin: '0 auto', marginTop: '2rem' }}>
     <div className="flex justify-center mb-6 animate-slide-up">
       <div style={{ background: 'var(--success-50)', padding: '0.75rem', borderRadius: '50%', color: 'var(--success-600)' }}>
         <ShieldCheck size={40} />

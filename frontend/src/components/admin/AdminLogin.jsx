@@ -13,7 +13,7 @@ export const AdminLogin = ({ onLogin, authError }) => {
   };
 
   return (
-    <div className="flex align-center justify-center" style={{ minHeight: '100vh', padding: '1rem' }}>
+    <div className="flex items-center justify-center" style={{ minHeight: '100vh', padding: '1rem' }}>
       <Card glass className="text-center animate-fade-in w-full" style={{ maxWidth: 400 }}>
         <div className="stat-icon" style={{ background: 'var(--primary-50)', width: 48, height: 48, margin: '0 auto 1.5rem' }}>
           <Lock size={24} style={{ color: 'var(--primary-color)' }} />

@@ -13,14 +13,14 @@ export const AuditHistory = ({ jobs }) => {
 
   return (
     <Card glass>
-      <div className="flex justify-between align-center mb-4" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
-        <div className="flex align-center gap-2">
+      <div className="flex justify-between items-center mb-4" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
+        <div className="flex items-center gap-2">
           <div className="stat-icon" style={{ background: 'var(--gray-100)', width: 32, height: 32 }}>
             <List size={16} style={{ color: 'var(--gray-600)' }} />
           </div>
           <h3 className="font-bold">Audit History</h3>
         </div>
-        <div className="flex align-center gap-2 file-upload-zone" style={{ padding: '0.375rem 0.75rem', border: '1px solid var(--gray-200)' }}>
+        <div className="flex items-center gap-2 file-upload-zone" style={{ padding: '0.375rem 0.75rem', border: '1px solid var(--gray-200)' }}>
           <Search size={14} style={{ color: 'var(--gray-400)' }} />
           <input
             type="text"
@@ -39,12 +39,12 @@ export const AuditHistory = ({ jobs }) => {
           filteredJobs.map(job => (
             <div key={job.id} className="job-row">
               <div>
-                <p className="font-semibold text-sm flex align-center gap-2">
+                <p className="font-semibold text-sm flex items-center gap-2">
                   #{job.shortId || job.id} <span className="text-xs text-muted font-medium">₹{job.cost || 0}</span>
                 </p>
                 <p className="text-xs text-muted truncate" style={{ maxWidth: 180 }} title={job.originalName}>{job.originalName}</p>
               </div>
-              <div className="flex align-center gap-2">
+              <div className="flex items-center gap-2">
                 <Badge status={job.status} />
               </div>
             </div>

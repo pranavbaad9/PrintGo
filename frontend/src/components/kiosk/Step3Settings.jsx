@@ -3,9 +3,9 @@ import { CheckCircle, FileText, Loader } from 'lucide-react';
 import { Card } from '../ui/Card';
 
 export const Step3Settings = ({ fileData, settingsData, price }) => (
-  <div className="animate-fade-in grid grid-cols-1 md:grid-cols-2 gap-6 w-full" style={{ maxWidth: 900, margin: '0 auto' }}>
+  <div className="animate-fade-in grid grid-cols-1 md:grid-cols-2 gap-6 w-full" style={{ maxWidth: 900, margin: '0 auto', marginTop: '2rem' }}>
     <Card glass style={{ display: 'flex', flexDirection: 'column' }}>
-      <div className="flex align-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-6">
         <div style={{ background: 'var(--success-50)', borderRadius: 'var(--radius-full)', padding: '0.625rem', display: 'flex', boxShadow: '0 0 0 1px var(--success-200)' }}>
           <CheckCircle size={24} style={{ color: 'var(--success-600)' }} />
         </div>
