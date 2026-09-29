@@ -1,6 +1,8 @@
 const os = require('os');
 const fs = require('fs');
 
+const isWin = os.platform() === 'win32';
+
 class SpoolerMonitor {
   constructor({ execFile, printerName }) {
     this.execFile = execFile;
@@ -10,43 +12,71 @@ class SpoolerMonitor {
   checkPrinterStatus(socket) {
     if (!this.printerName || this.printerName === 'SimulationMode') return;
     
-    this.execFile('powershell.exe', ['-Command', `Get-WmiObject -Class Win32_Printer -Filter "Name='${this.printerName}'" | Select-Object PrinterStatus, ExtendedPrinterStatus, ErrorState`], (error, stdout) => {
-      if (error) {
-        console.error(`Error querying printer status: ${error.message}`);
-        return;
-      }
-      
-      let isError = false;
-      let errorMessage = '';
+    if (isWin) {
+      this.execFile('powershell.exe', ['-Command', `Get-WmiObject -Class Win32_Printer -Filter "Name='${this.printerName}'" | Select-Object PrinterStatus, ExtendedPrinterStatus, ErrorState`], (error, stdout) => {
+        if (error) {
+          console.error(`Error querying printer status: ${error.message}`);
+          return;
+        }
+        
+        let isError = false;
+        let errorMessage = '';
 
-      if (stdout.includes('4') && stdout.includes('Paper Out')) {
-        isError = true;
-        errorMessage = 'Out of Paper';
-      } else if (stdout.includes('True') && stdout.includes('Offline')) { 
-        isError = true;
-        errorMessage = 'Printer Offline';
-      } else if (stdout.includes('5')) {
-        isError = true;
-        errorMessage = 'Paper Jam';
-      }
+        if (stdout.includes('4') && stdout.includes('Paper Out')) {
+          isError = true;
+          errorMessage = 'Out of Paper';
+        } else if (stdout.includes('True') && stdout.includes('Offline')) { 
+          isError = true;
+          errorMessage = 'Printer Offline';
+        } else if (stdout.includes('5')) {
+          isError = true;
+          errorMessage = 'Paper Jam';
+        }
 
-      const totalMem = os.totalmem();
-      const freeMem = os.freemem();
-      const memoryUsage = ((totalMem - freeMem) / totalMem * 100).toFixed(2);
-      const uptime = os.uptime();
-
-      socket.emit('printer_status_update', {
-        isError,
-        errorMessage,
-        printerName: this.printerName,
-        telemetry: {
-          memoryUsage: `${memoryUsage}%`,
-          uptime: `${uptime}s`,
-          platform: os.platform(),
-          arch: os.arch()
-        },
-        timestamp: new Date().toISOString()
+        this.emitStatus(socket, isError, errorMessage);
       });
+    } else {
+      // Linux CUPS
+      this.execFile('lpstat', ['-p', this.printerName], (error, stdout) => {
+        if (error) return; 
+        
+        let isError = false;
+        let errorMessage = '';
+        const output = stdout.toLowerCase();
+        
+        if (output.includes('paused') || output.includes('disabled') || output.includes('offline') || output.includes('unplugged')) {
+          isError = true;
+          errorMessage = 'Printer Offline or Paused';
+        } else if (output.includes('paper out') || output.includes('media empty')) {
+          isError = true;
+          errorMessage = 'Out of Paper';
+        } else if (output.includes('jam')) {
+          isError = true;
+          errorMessage = 'Paper Jam';
+        }
+
+        this.emitStatus(socket, isError, errorMessage);
+      });
+    }
+  }
+
+  emitStatus(socket, isError, errorMessage) {
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const memoryUsage = ((totalMem - freeMem) / totalMem * 100).toFixed(2);
+    const uptime = os.uptime();
+
+    socket.emit('printer_status_update', {
+      isError,
+      errorMessage,
+      printerName: this.printerName,
+      telemetry: {
+        memoryUsage: `${memoryUsage}%`,
+        uptime: `${uptime}s`,
+        platform: os.platform(),
+        arch: os.arch()
+      },
+      timestamp: new Date().toISOString()
     });
   }
 
@@ -76,44 +106,61 @@ class SpoolerMonitor {
         return;
       }
 
-      this.execFile('powershell.exe', ['-Command', `Get-PrintJob -PrinterName '${this.printerName}' | Select-Object DocumentName, JobStatus | ConvertTo-Json`], (error, stdout) => {
-        if (error) return; 
-        if (!stdout || stdout.trim() === '') {
-          if (wasSeenInQueue || checkAttempts > 5) {
-            clearInterval(pollSpooler);
-            console.log(`✅ Job ${jobId} physically completed (cleared from spooler)!`);
-            socket.emit('print_physical_success', { jobId });
-            if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
-          }
-          return;
-        }
-
-        try {
-          let jobs = JSON.parse(stdout);
-          if (!Array.isArray(jobs)) jobs = [jobs];
-
-          const ourJob = jobs.find(j => j.DocumentName && j.DocumentName.includes(jobId));
-          
-          if (ourJob) {
-            wasSeenInQueue = true; 
-            const status = ourJob.JobStatus || '';
-            if (status.includes('Error') || status.includes('PaperOut') || status.includes('PaperJam') || status.includes('Blocked')) {
+      if (isWin) {
+        this.execFile('powershell.exe', ['-Command', `Get-PrintJob -PrinterName '${this.printerName}' | Select-Object DocumentName, JobStatus | ConvertTo-Json`], (error, stdout) => {
+          if (error) return; 
+          if (!stdout || stdout.trim() === '') {
+            if (wasSeenInQueue || checkAttempts > 5) {
               clearInterval(pollSpooler);
-              console.error(`❌ Physical Print Error for Job ${jobId}: ${status}`);
-              socket.emit('print_physical_error', { jobId, error: status });
-              this.execFile('powershell.exe', ['-Command', `Get-PrintJob -PrinterName '${this.printerName}' | Where-Object DocumentName -like '*${jobId}*' | Remove-PrintJob`]);
+              console.log(`✅ Job ${jobId} physically completed (cleared from spooler)!`);
+              socket.emit('print_physical_success', { jobId });
               if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
             }
-          } else if (wasSeenInQueue) {
-            clearInterval(pollSpooler);
-            console.log(`✅ Job ${jobId} physically completed (cleared from spooler)!`);
-            socket.emit('print_physical_success', { jobId });
-            if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
+            return;
           }
-        } catch (e) {
-          // JSON parse error, ignore and retry next second
-        }
-      });
+
+          try {
+            let jobs = JSON.parse(stdout);
+            if (!Array.isArray(jobs)) jobs = [jobs];
+
+            const ourJob = jobs.find(j => j.DocumentName && j.DocumentName.includes(jobId));
+            
+            if (ourJob) {
+              wasSeenInQueue = true; 
+              const status = ourJob.JobStatus || '';
+              if (status.includes('Error') || status.includes('PaperOut') || status.includes('PaperJam') || status.includes('Blocked')) {
+                clearInterval(pollSpooler);
+                console.error(`❌ Physical Print Error for Job ${jobId}: ${status}`);
+                socket.emit('print_physical_error', { jobId, error: status });
+                this.execFile('powershell.exe', ['-Command', `Get-PrintJob -PrinterName '${this.printerName}' | Where-Object DocumentName -like '*${jobId}*' | Remove-PrintJob`]);
+                if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
+              }
+            } else if (wasSeenInQueue) {
+              clearInterval(pollSpooler);
+              console.log(`✅ Job ${jobId} physically completed (cleared from spooler)!`);
+              socket.emit('print_physical_success', { jobId });
+              if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
+            }
+          } catch (e) {
+            // JSON parse error, ignore and retry next second
+          }
+        });
+      } else {
+        // Linux CUPS
+        this.execFile('lpstat', ['-o', this.printerName], (error, stdout) => {
+          if (error) return;
+          const output = stdout || '';
+          
+          if (output.includes(jobId)) {
+            wasSeenInQueue = true;
+          } else if (wasSeenInQueue || checkAttempts > 5) {
+             clearInterval(pollSpooler);
+             console.log(`✅ Job ${jobId} physically completed (cleared from spooler)!`);
+             socket.emit('print_physical_success', { jobId });
+             if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
+          }
+        });
+      }
     }, 1000);
 
     return pollSpooler;

@@ -1,7 +1,6 @@
 require('dotenv').config();
 const { io } = require('socket.io-client');
 const axios = require('axios');
-const ptp = require('pdf-to-printer');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -192,39 +191,53 @@ socket.on('physical_print_job', async (jobData) => {
     fs.writeFileSync(localFilePath, fileBuffer);
     console.log(`✅ File saved to disk. Sending to printer...`);
 
-    const printOptions = {};
-    if (PRINTER_NAME) {
-      printOptions.printer = PRINTER_NAME;
-    }
+    const isWin = os.platform() === 'win32';
     
-    // Apply settings if available
-    if (jobData.settings) {
-      if (jobData.settings.copies) {
-        printOptions.copies = jobData.settings.copies;
-      }
-      if (jobData.settings.color === 'bw') {
-        printOptions.monochrome = true;
-      }
-      // P1-004: Pass duplex setting to printer
-      if (jobData.settings.duplex === 'double') {
-        printOptions.duplex = true;
-      }
-      if (jobData.settings.pageRangeType === 'custom' && jobData.settings.customRange) {
-        // P1: Validate customRange input to prevent command injection
-        if (/^[0-9,-]+$/.test(jobData.settings.customRange)) {
-          printOptions.pages = jobData.settings.customRange;
-        } else {
-          console.error(`⚠️  WARNING: Invalid customRange input detected: ${jobData.settings.customRange}. Ignoring.`);
+    if (PRINTER_NAME) {
+      if (isWin) {
+        const ptp = require('pdf-to-printer');
+        const printOptions = { printer: PRINTER_NAME };
+        
+        if (jobData.settings) {
+          if (jobData.settings.copies) printOptions.copies = jobData.settings.copies;
+          if (jobData.settings.color === 'bw') printOptions.monochrome = true;
+          if (jobData.settings.duplex === 'double') printOptions.duplex = true;
+          if (jobData.settings.pageRangeType === 'custom' && jobData.settings.customRange) {
+            if (/^[0-9,-]+$/.test(jobData.settings.customRange)) {
+              printOptions.pages = jobData.settings.customRange;
+            } else {
+              console.error(`⚠️  WARNING: Invalid customRange input detected: ${jobData.settings.customRange}. Ignoring.`);
+            }
+          }
         }
+        
+        console.log(`⚙️  Windows Print options:`, JSON.stringify(printOptions));
+        await ptp.print(localFilePath, printOptions);
+      } else {
+        // Linux CUPS Support (Raspberry Pi)
+        const args = ['-d', PRINTER_NAME, '-t', jobData.jobId];
+        
+        if (jobData.settings) {
+          if (jobData.settings.copies) args.push('-n', String(jobData.settings.copies));
+          if (jobData.settings.duplex === 'double') args.push('-o', 'sides=two-sided-long-edge');
+          else args.push('-o', 'sides=one-sided');
+          
+          if (jobData.settings.pageRangeType === 'custom' && jobData.settings.customRange) {
+            if (/^[0-9,-]+$/.test(jobData.settings.customRange)) {
+              args.push('-P', String(jobData.settings.customRange));
+            } else {
+              console.error(`⚠️  WARNING: Invalid customRange input detected: ${jobData.settings.customRange}. Ignoring.`);
+            }
+          }
+        }
+        args.push(localFilePath);
+        
+        console.log(`⚙️  Linux Print command: lp ${args.join(' ')}`);
+        
+        await execFileAsync('lp', args);
       }
-    }
-    
-    if (PRINTER_NAME) {
-      console.log(`⚙️  Print options:`, JSON.stringify(printOptions));
       
-      // Attempt printing
-      await ptp.print(localFilePath, printOptions);
-      console.log(`🖨️  SUCCESS: Job ${jobData.jobId} sent to Windows Print Spooler!`);
+      console.log(`🖨️  SUCCESS: Job ${jobData.jobId} sent to Print Spooler!`);
       
       // Notify backend that spooler accepted the job
       socket.emit('print_spooler_success', { jobId: jobData.jobId });
