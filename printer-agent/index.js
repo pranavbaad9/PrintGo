@@ -41,11 +41,16 @@ async function validatePrinter() {
         return;
     }
     try {
-        await execFileAsync('powershell.exe', ['-Command', `Get-Printer -Name '${PRINTER_NAME}' -ErrorAction Stop | Select-Object Name`]);
-        console.log(`\n✅ Validated local printer: ${PRINTER_NAME}`);
+        if (os.platform() === 'win32') {
+            await execFileAsync('powershell.exe', ['-Command', `Get-Printer -Name '${PRINTER_NAME}' -ErrorAction Stop | Select-Object Name`]);
+            console.log(`\n✅ Validated local Windows printer: ${PRINTER_NAME}`);
+        } else {
+            await execFileAsync('lpstat', ['-p', PRINTER_NAME]);
+            console.log(`\n✅ Validated local CUPS printer: ${PRINTER_NAME}`);
+        }
     } catch (error) {
         console.error(`\n🔥 FATAL ERROR: Printer '${PRINTER_NAME}' does not exist on this machine.`);
-        console.error(`Please verify the PRINTER_NAME in .env matches the Windows printer name exactly.\n`);
+        console.error(`Please verify the PRINTER_NAME in .env matches exactly.\n`);
         process.exit(1);
     }
 }
