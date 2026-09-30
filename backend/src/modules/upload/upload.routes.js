@@ -18,7 +18,8 @@ const upload = multer({
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
       'image/jpeg',
-      'image/png'
+      'image/png',
+      'application/octet-stream' // Allow E2E encrypted blobs
     ];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
