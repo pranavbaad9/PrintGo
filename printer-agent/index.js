@@ -178,16 +178,21 @@ socket.on('physical_print_job', async (jobData) => {
         
         console.log(`✅ Decryption successful. Validating page count...`);
         
-        // 3. Verify Page Count (Fraud Protection)
-        const pdfData = await pdfParse(fileBuffer);
-        const actualPages = pdfData.numpages;
+        // 3. Verify Page Count (Fraud Protection) - Only for PDFs
+        const isPdf = fileBuffer.length > 5 && fileBuffer.toString('utf8', 0, 5) === '%PDF-';
         const claimedPages = jobData.pagesToPrint || 1;
-        
-        if (actualPages > claimedPages) {
-          throw new Error(`Fraud detected! Claimed pages: ${claimedPages}, Actual pages: ${actualPages}`);
+
+        if (isPdf) {
+          const pdfData = await pdfParse(fileBuffer);
+          const actualPages = pdfData.numpages;
+          
+          if (actualPages > claimedPages) {
+            throw new Error(`Fraud detected! Claimed pages: ${claimedPages}, Actual pages: ${actualPages}`);
+          }
+          console.log(`📄 Page count validated (${actualPages} pages).`);
+        } else {
+          console.log(`🖼️ Image detected. Bypassing PDF page validation.`);
         }
-        
-        console.log(`📄 Page count validated (${actualPages} pages).`);
       } catch (decErr) {
         throw new Error(`Security Exception: ${decErr.message}`);
       }
