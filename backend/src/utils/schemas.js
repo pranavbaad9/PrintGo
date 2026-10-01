@@ -45,6 +45,8 @@ const createJobSchema = z.object({
       message: "Invalid custom range format",
       path: ["customRange"],
     }),
+    encryptedKey: z.string().nullable().optional(),
+    iv: z.string().nullable().optional(),
   }).strict(),
   query: z.any(),
   params: z.any(),
