@@ -136,7 +136,9 @@ socket.on('physical_print_job', async (jobData) => {
     ? jobData.fileUrl 
     : `${BACKEND_URL}${jobData.fileUrl}`;
   
-  const localFilePath = path.join(tempDir, `${jobData.jobId}.pdf`);
+  // Extract original extension (default to .pdf if missing)
+  const ext = jobData.originalName ? path.extname(jobData.originalName) : '.pdf';
+  const localFilePath = path.join(tempDir, `${jobData.jobId}${ext}`);
 
   try {
     console.log(`⬇️  Downloading PDF from cloud...`);
