@@ -214,7 +214,7 @@ const MobileView = () => {
         const encryptedRawKey = forgePublicKey.encrypt(
           forge.util.createBuffer(rawKey).getBytes(), 
           'RSA-OAEP', 
-          { md: forge.md.sha256.create(), mgf1: { md: forge.md.sha1.create() } }
+          { md: forge.md.sha256.create(), mgf1: { md: forge.md.sha256.create() } }
         );
         
         setEncryptedKey(forge.util.encode64(encryptedRawKey));
