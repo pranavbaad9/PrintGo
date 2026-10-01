@@ -211,14 +211,17 @@ const MobileView = () => {
         
         // 5. Encrypt AES Key with Kiosk RSA Public Key
         const forgePublicKey = forge.pki.publicKeyFromPem(publicKey);
+        const rawKeyStr = Array.from(rawKey).map(b => String.fromCharCode(b)).join('');
+        const rawIvStr = Array.from(rawIv).map(b => String.fromCharCode(b)).join('');
+        
         const encryptedRawKey = forgePublicKey.encrypt(
-          forge.util.createBuffer(rawKey).getBytes(), 
+          rawKeyStr, 
           'RSA-OAEP', 
           { md: forge.md.sha256.create(), mgf1: { md: forge.md.sha256.create() } }
         );
         
         setEncryptedKey(forge.util.encode64(encryptedRawKey));
-        setIv(forge.util.encode64(forge.util.createBuffer(rawIv).getBytes()));
+        setIv(forge.util.encode64(rawIvStr));
         isEncrypted = true;
       }
       
