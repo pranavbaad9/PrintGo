@@ -167,7 +167,7 @@ socket.on('physical_print_job', async (jobData) => {
         );
 
         // 2. Decrypt File Payload using AES-GCM
-        const decipher = crypto.createDecipheriv('aes-256-gcm', Buffer.from(jobData.iv, 'base64'), decryptedKey);
+        const decipher = crypto.createDecipheriv('aes-256-gcm', decryptedKey, Buffer.from(jobData.iv, 'base64'));
         
         // Extract Auth Tag (last 16 bytes)
         const authTag = fileBuffer.slice(-16);
