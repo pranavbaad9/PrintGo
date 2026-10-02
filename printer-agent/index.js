@@ -9,7 +9,14 @@ const { exec, execFile } = require('child_process');
 const execFileAsync = util.promisify(execFile);
 const crypto = require('crypto');
 const forge = require('node-forge');
-const pdfParse = require('pdf-parse');
+let pdfParse;
+try {
+  const pdfModule = require('pdf-parse');
+  // pdf-parse v2 exports { PDFParse } class, v1 exports a function directly
+  pdfParse = typeof pdfModule === 'function' ? pdfModule : null;
+} catch(e) {
+  pdfParse = null;
+}
 const SpoolerMonitor = require('./src/spooler');
 
 process.on('uncaughtException', (err) => {
@@ -83,14 +90,18 @@ console.log('✅ Keys generated successfully.');
 
 const spoolerMonitor = new SpoolerMonitor({ execFile, printerName: PRINTER_NAME });
 
+let statusInterval = null;
 socket.on('connect', () => {
   console.log(`✅ Connected to cloud backend! (Socket ID: ${socket.id})`);
   
   // Register Public Key with Backend for E2EE
   socket.emit('register_public_key', { publicKey: publicKeyPem });
   
+  // Clear any previous interval to prevent leaks on reconnect
+  if (statusInterval) clearInterval(statusInterval);
+  
   // Periodically send printer status
-  setInterval(() => {
+  statusInterval = setInterval(() => {
     spoolerMonitor.checkPrinterStatus(socket);
   }, 30000); // every 30s
 });
@@ -184,7 +195,7 @@ socket.on('physical_print_job', async (jobData) => {
         const isPdf = fileBuffer.length > 5 && fileBuffer.toString('utf8', 0, 5) === '%PDF-';
         const claimedPages = jobData.pagesToPrint || 1;
 
-        if (isPdf) {
+        if (isPdf && pdfParse) {
           const pdfData = await pdfParse(fileBuffer);
           const actualPages = pdfData.numpages;
           
@@ -192,6 +203,8 @@ socket.on('physical_print_job', async (jobData) => {
             throw new Error(`Fraud detected! Claimed pages: ${claimedPages}, Actual pages: ${actualPages}`);
           }
           console.log(`📄 Page count validated (${actualPages} pages).`);
+        } else if (isPdf) {
+          console.log(`⚠️  pdf-parse unavailable, skipping page count validation.`);
         } else {
           console.log(`🖼️ Image detected. Bypassing PDF page validation.`);
         }
