@@ -165,68 +165,94 @@ const MobileView = () => {
   }, [settings.color, settings.duplex, settings.copies, settings.pageRangeType, settings.customRange, fileData, socket]);
 
   const handleFileUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 50 * 1024 * 1024) {
-      showError('File size exceeds 50MB limit.');
+    const files = Array.from(e.target.files);
+    if (!files || files.length === 0) return;
+    
+    // Check total size
+    const totalSize = files.reduce((acc, file) => acc + file.size, 0);
+    if (totalSize > 50 * 1024 * 1024) {
+      showError('Total file size exceeds 50MB limit.');
       return;
     }
 
     setUploading(true);
     
     try {
-      let payloadToUpload = file;
+      let payloadToUpload = files[0];
       let claimedPages = 1;
       let isEncrypted = false;
-      
-      // E2E Encryption Flow
-      if (publicKey && file.type === 'application/pdf') {
-        console.log('Initiating true E2E Encryption...');
+      let finalFileName = files.length > 1 ? `Merged_${files.length}_Files.pdf` : files[0].name;
+
+      // If multiple files, OR if E2E encryption is active, we normalize everything into a single PDF
+      if (files.length > 1 || (publicKey && (files[0].type === 'application/pdf' || files[0].type.startsWith('image/')))) {
+        console.log('Processing files and generating merged PDF...');
+        const mergedPdf = await PDFDocument.create();
+
+        for (const file of files) {
+          const arrayBuffer = await file.arrayBuffer();
+          if (file.type === 'application/pdf') {
+            const pdf = await PDFDocument.load(arrayBuffer);
+            const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+            copiedPages.forEach((page) => mergedPdf.addPage(page));
+          } else if (file.type.startsWith('image/')) {
+            let image;
+            if (file.type === 'image/png') {
+              image = await mergedPdf.embedPng(arrayBuffer);
+            } else {
+              image = await mergedPdf.embedJpg(arrayBuffer);
+            }
+            // Add a page matching the image dimensions
+            const page = mergedPdf.addPage([image.width, image.height]);
+            page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height });
+          } else if (files.length > 1) {
+             throw new Error(`Cannot merge ${file.name}. Only PDFs and Images can be merged together.`);
+          }
+        }
+
+        const mergedPdfBytes = await mergedPdf.save();
+        claimedPages = mergedPdf.getPageCount();
+        console.log(`Merged document has ${claimedPages} pages.`);
         
-        // 1. Read file locally
-        const arrayBuffer = await file.arrayBuffer();
-        
-        // 2. Extract page count locally
-        const pdfDoc = await PDFDocument.load(arrayBuffer);
-        claimedPages = pdfDoc.getPageCount();
-        console.log(`Local page count: ${claimedPages}`);
-        
-        // 3. Generate AES-GCM Key & IV
-        const rawKey = window.crypto.getRandomValues(new Uint8Array(32)); // 256-bit
-        const rawIv = window.crypto.getRandomValues(new Uint8Array(12)); // 96-bit
-        
-        const cryptoKey = await window.crypto.subtle.importKey(
-          'raw', rawKey, { name: 'AES-GCM' }, false, ['encrypt']
-        );
-        
-        // 4. Encrypt File
-        const encryptedBuffer = await window.crypto.subtle.encrypt(
-          { name: 'AES-GCM', iv: rawIv },
-          cryptoKey,
-          arrayBuffer
-        );
-        
-        // Convert to Blob
-        payloadToUpload = new Blob([encryptedBuffer], { type: 'application/octet-stream' });
-        
-        // 5. Encrypt AES Key with Kiosk RSA Public Key
-        const forgePublicKey = forge.pki.publicKeyFromPem(publicKey);
-        const rawKeyStr = Array.from(rawKey).map(b => String.fromCharCode(b)).join('');
-        const rawIvStr = Array.from(rawIv).map(b => String.fromCharCode(b)).join('');
-        
-        const encryptedRawKey = forgePublicKey.encrypt(
-          rawKeyStr, 
-          'RSA-OAEP', 
-          { md: forge.md.sha256.create(), mgf1: { md: forge.md.sha256.create() } }
-        );
-        
-        setEncryptedKey(forge.util.encode64(encryptedRawKey));
-        setIv(forge.util.encode64(rawIvStr));
-        isEncrypted = true;
+        // Update payload to the new merged PDF
+        payloadToUpload = new Blob([mergedPdfBytes], { type: 'application/pdf' });
+        if (files.length > 1) finalFileName = `Merged_${files.length}_Files.pdf`;
+
+        // E2E Encryption Flow
+        if (publicKey) {
+          console.log('Initiating true E2E Encryption...');
+          const rawKey = window.crypto.getRandomValues(new Uint8Array(32)); 
+          const rawIv = window.crypto.getRandomValues(new Uint8Array(12)); 
+          
+          const cryptoKey = await window.crypto.subtle.importKey(
+            'raw', rawKey, { name: 'AES-GCM' }, false, ['encrypt']
+          );
+          
+          const encryptedBuffer = await window.crypto.subtle.encrypt(
+            { name: 'AES-GCM', iv: rawIv },
+            cryptoKey,
+            mergedPdfBytes
+          );
+          
+          payloadToUpload = new Blob([encryptedBuffer], { type: 'application/octet-stream' });
+          
+          const forgePublicKey = forge.pki.publicKeyFromPem(publicKey);
+          const rawKeyStr = Array.from(rawKey).map(b => String.fromCharCode(b)).join('');
+          const rawIvStr = Array.from(rawIv).map(b => String.fromCharCode(b)).join('');
+          
+          const encryptedRawKey = forgePublicKey.encrypt(
+            rawKeyStr, 
+            'RSA-OAEP', 
+            { md: forge.md.sha256.create(), mgf1: { md: forge.md.sha256.create() } }
+          );
+          
+          setEncryptedKey(forge.util.encode64(encryptedRawKey));
+          setIv(forge.util.encode64(rawIvStr));
+          isEncrypted = true;
+        }
       }
       
       const formData = new FormData();
-      formData.append('file', payloadToUpload, file.name);
+      formData.append('file', payloadToUpload, finalFileName);
       formData.append('isEncrypted', isEncrypted);
       formData.append('claimedPages', claimedPages);
 
@@ -236,15 +262,18 @@ const MobileView = () => {
       
       if (response.data.success) {
         const data = response.data.file;
-        // Ensure local page count overrides backend's fallback
-        data.pages = isEncrypted ? claimedPages : data.pages; 
+        data.pages = (isEncrypted || files.length > 1) ? claimedPages : data.pages; 
+        // Force the filename to match our merged name in UI
+        data.originalName = finalFileName;
         setFileData(data);
         socket.emit('file_uploaded', { sessionId, fileData: data });
         setStep(2);
       }
     } catch (err) {
       console.error(err);
-      if (err.code === 'ECONNABORTED' || (err.message && err.message.includes('timeout'))) {
+      if (err.message && err.message.includes('Cannot merge')) {
+        showError(err.message);
+      } else if (err.code === 'ECONNABORTED' || (err.message && err.message.includes('timeout'))) {
         showError('Server is waking up, please try again in a few seconds.');
       } else {
         showError('Upload failed. Please try again.');
@@ -370,12 +399,12 @@ const MobileView = () => {
                 </div>
               ) : (
                 <label className="btn btn-primary w-full max-w-xs mx-auto" style={{ display: 'flex', cursor: 'pointer', padding: '1rem', fontSize: '1.05rem', borderRadius: 'var(--radius-lg)' }}>
-                  Choose File
-                  <input type="file" style={{ display: 'none' }} onChange={handleFileUpload} disabled={uploading} />
+                  Choose Files
+                  <input type="file" multiple accept=".pdf,image/png,image/jpeg,image/jpg" style={{ display: 'none' }} onChange={handleFileUpload} disabled={uploading} />
                 </label>
               )}
               
-              {!uploading && <p className="text-xs text-muted mt-5 opacity-70">Supports PDF, DOCX, PPTX, JPG, PNG</p>}
+              {!uploading && <p className="text-xs text-muted mt-5 opacity-70">Supports multiple PDFs and Photos</p>}
             </div>
           </Card>
         );
