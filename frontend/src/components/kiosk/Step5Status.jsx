@@ -1,10 +1,20 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Loader, Printer, CheckCircle, FileText, AlertTriangle } from 'lucide-react';
 import { Button } from '../ui/Button';
 
-export const Step5Status = ({ jobStatus, eta, formatEta }) => (
-  <div className="text-center animate-fade-in" style={{ maxWidth: 500, margin: '0 auto', marginTop: '2rem' }}>
-    {jobStatus === 'WAITING' && (
+export const Step5Status = ({ jobStatus, eta, formatEta }) => {
+  useEffect(() => {
+    if (jobStatus === 'COMPLETED' || jobStatus === 'FAILED' || jobStatus === 'CANCELLED') {
+      const timer = setTimeout(() => {
+        window.location.reload();
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [jobStatus]);
+
+  return (
+    <div className="text-center animate-fade-in" style={{ maxWidth: 500, margin: '0 auto', marginTop: '2rem' }}>
+      {jobStatus === 'WAITING' && (
       <div className="animate-scale-in">
         <div style={{ display: 'inline-flex', background: 'var(--warning-50)', borderRadius: '50%', padding: '1.5rem', marginBottom: '1.5rem', border: '1px solid var(--warning-200)', position: 'relative' }}>
           <div style={{ position: 'absolute', inset: -10, border: '2px dashed var(--warning-300)', borderRadius: '50%', animation: 'spin 8s linear infinite' }} />
@@ -58,6 +68,7 @@ export const Step5Status = ({ jobStatus, eta, formatEta }) => (
           Start Over
         </Button>
       </div>
-    )}
-  </div>
-);
+      )}
+    </div>
+  );
+};
