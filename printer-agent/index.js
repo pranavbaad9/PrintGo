@@ -214,10 +214,36 @@ socket.on('physical_print_job', async (jobData) => {
     }
 
     fs.writeFileSync(localFilePath, fileBuffer);
-    console.log(`✅ File saved to disk. Sending to printer...`);
+    console.log(`✅ File saved to disk. Validating format...`);
 
     const isWin = os.platform() === 'win32';
-    
+    let printFilePath = localFilePath;
+
+    // Convert Office formats to PDF if on Linux (Raspberry Pi)
+    if (!isWin) {
+      const officeExtensions = ['.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt'];
+      if (officeExtensions.includes(ext.toLowerCase())) {
+        console.log(`🔄 Converting ${ext} to PDF using LibreOffice...`);
+        try {
+          await execFileAsync('libreoffice', [
+            '--headless',
+            '--convert-to',
+            'pdf',
+            localFilePath,
+            '--outdir',
+            tempDir
+          ]);
+          printFilePath = path.join(tempDir, `${jobData.jobId}.pdf`);
+          console.log(`✅ Conversion successful: ${printFilePath}`);
+          // Delete the original Office document to save space
+          if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
+        } catch (err) {
+          console.error(`⚠️ LibreOffice conversion failed: ${err.message}`);
+          throw new Error(`Failed to convert ${ext} document for printing. Please ensure LibreOffice is installed.`);
+        }
+      }
+    }
+
     if (PRINTER_NAME) {
       if (isWin) {
         const ptp = require('pdf-to-printer');
@@ -237,7 +263,7 @@ socket.on('physical_print_job', async (jobData) => {
         }
         
         console.log(`⚙️  Windows Print options:`, JSON.stringify(printOptions));
-        await ptp.print(localFilePath, printOptions);
+        await ptp.print(printFilePath, printOptions);
       } else {
         // Linux CUPS Support (Raspberry Pi)
         const args = ['-d', PRINTER_NAME, '-t', jobData.jobId];
@@ -255,7 +281,7 @@ socket.on('physical_print_job', async (jobData) => {
             }
           }
         }
-        args.push(localFilePath);
+        args.push(printFilePath);
         
         console.log(`⚙️  Linux Print command: lp ${args.join(' ')}`);
         
@@ -268,10 +294,10 @@ socket.on('physical_print_job', async (jobData) => {
       socket.emit('print_spooler_success', { jobId: jobData.jobId });
 
       // P3-001: True Print Verification via Spooler Polling
-      spoolerMonitor.startPollingJob(jobData.jobId, localFilePath, socket);
+      spoolerMonitor.startPollingJob(jobData.jobId, printFilePath, socket);
     } else {
       // Simulation mode bypass (No physical printer)
-      spoolerMonitor.startPollingJob(jobData.jobId, localFilePath, socket);
+      spoolerMonitor.startPollingJob(jobData.jobId, printFilePath, socket);
     }
 
 
@@ -280,6 +306,7 @@ socket.on('physical_print_job', async (jobData) => {
     console.error(`❌ ERROR processing Job ${jobData.jobId}:`, error.message);
     socket.emit('print_spooler_error', { jobId: jobData.jobId, error: error.message });
     if (fs.existsSync(localFilePath)) fs.unlinkSync(localFilePath);
+    if (printFilePath !== localFilePath && fs.existsSync(printFilePath)) fs.unlinkSync(printFilePath);
   }
 });
 
