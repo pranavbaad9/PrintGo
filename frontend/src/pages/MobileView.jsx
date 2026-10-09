@@ -400,11 +400,11 @@ const MobileView = () => {
               ) : (
                 <label className="btn btn-primary w-full max-w-xs mx-auto" style={{ display: 'flex', cursor: 'pointer', padding: '1rem', fontSize: '1.05rem', borderRadius: 'var(--radius-lg)' }}>
                   Choose Files
-                  <input type="file" multiple accept=".pdf,image/png,image/jpeg,image/jpg" style={{ display: 'none' }} onChange={handleFileUpload} disabled={uploading} />
+                  <input type="file" multiple accept=".pdf,image/png,image/jpeg,image/jpg,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt" style={{ display: 'none' }} onChange={handleFileUpload} disabled={uploading} />
                 </label>
               )}
               
-              {!uploading && <p className="text-xs text-muted mt-5 opacity-70">Supports multiple PDFs and Photos</p>}
+              {!uploading && <p className="text-xs text-muted mt-5 opacity-70">Supports PDFs, Photos, Word, PPT, Excel & Text</p>}
             </div>
           </Card>
         );
