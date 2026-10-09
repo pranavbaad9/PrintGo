@@ -54,6 +54,44 @@ const setupSockets = (io) => {
       socket.join(`machine_${socket.machineId}`);
       // Notify the printer it successfully registered
       socket.emit('printer_registered_success', { machineId: socket.machineId, name: socket.machineName });
+
+      // P4: Recovery System for dropped socket messages.
+      // If the printer dropped internet exactly when a payment succeeded, the socket message was lost.
+      // Send any jobs that are stuck in PRINTING state back to the printer immediately upon reconnection.
+      (async () => {
+        try {
+          const stuckJobs = await prisma.printJob.findMany({
+            where: {
+              machineId: socket.machineId,
+              status: 'PRINTING'
+            },
+            include: { document: true }
+          });
+          
+          for (const job of stuckJobs) {
+            const printData = {
+              jobId: job.shortId,
+              fileUrl: job.document ? job.document.filename : '', 
+              originalName: job.document ? job.document.originalName : '',
+              pagesToPrint: job.pagesToPrint,
+              settings: {
+                color: job.color,
+                duplex: job.duplex,
+                copies: job.copies,
+                pageRangeType: job.pageRangeType,
+                customRange: job.customRange
+              },
+              price: job.cost,
+              encryptedKey: job.encryptedKey,
+              iv: job.iv
+            };
+            logger.info(`Resending stuck PRINTING job ${job.shortId} to reconnected machine ${socket.machineId}`);
+            socket.emit('physical_print_job', printData);
+          }
+        } catch (e) {
+          logger.error('Error recovering stuck jobs for printer:', e);
+        }
+      })();
     }
 
     // Admin users join the 'admins' room for receiving printer status updates
