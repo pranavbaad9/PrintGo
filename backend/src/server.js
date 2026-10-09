@@ -148,7 +148,7 @@ const autoSeed = async () => {
     // Seed Admin
     const existingAdmin = await prisma.user.findUnique({ where: { email: 'admin@printgo.in' }});
     if (!existingAdmin) {
-      const bcrypt = require('bcryptjs');
+      const bcrypt = require('bcrypt');
       const hashedPassword = await bcrypt.hash('pg_admin_P#9xK2m$Q', 10);
       await prisma.user.create({
         data: {
