@@ -81,12 +81,30 @@ const socket = io(BACKEND_URL, {
   auth: { machineKey: MACHINE_KEY }
 });
 
-// Generate RSA Keypair on startup for E2EE
-console.log('🔐 Generating RSA-OAEP Keypair for End-to-End Encryption...');
-const rsaKeypair = forge.pki.rsa.generateKeyPair({ bits: 2048, e: 0x10001 });
-const publicKeyPem = forge.pki.publicKeyToPem(rsaKeypair.publicKey);
-const privateKeyPem = forge.pki.privateKeyToPem(rsaKeypair.privateKey);
-console.log('✅ Keys generated successfully.');
+// Persistent RSA Keypair for E2EE across restarts
+const keysDir = path.join(__dirname, 'keys');
+if (!fs.existsSync(keysDir)) fs.mkdirSync(keysDir, { recursive: true });
+
+const pubKeyPath = path.join(keysDir, 'public.pem');
+const privKeyPath = path.join(keysDir, 'private.pem');
+
+let publicKeyPem;
+let privateKeyPem;
+
+if (fs.existsSync(pubKeyPath) && fs.existsSync(privKeyPath)) {
+  console.log('🔐 Loading existing RSA Keypair for E2EE...');
+  publicKeyPem = fs.readFileSync(pubKeyPath, 'utf8');
+  privateKeyPem = fs.readFileSync(privKeyPath, 'utf8');
+  console.log('✅ Keys loaded from disk.');
+} else {
+  console.log('🔐 Generating persistent RSA-OAEP Keypair for End-to-End Encryption...');
+  const rsaKeypair = forge.pki.rsa.generateKeyPair({ bits: 2048, e: 0x10001 });
+  publicKeyPem = forge.pki.publicKeyToPem(rsaKeypair.publicKey);
+  privateKeyPem = forge.pki.privateKeyToPem(rsaKeypair.privateKey);
+  fs.writeFileSync(pubKeyPath, publicKeyPem, 'utf8');
+  fs.writeFileSync(privKeyPath, privateKeyPem, 'utf8');
+  console.log('✅ New persistent keys generated and saved to disk.');
+}
 
 const spoolerMonitor = new SpoolerMonitor({ execFile, printerName: PRINTER_NAME });
 
