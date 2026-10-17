@@ -13,6 +13,9 @@ const prisma = basePrisma.$extends({
           if (result.machineId) {
             global.io.to(`machine_${result.machineId}`).emit('job_status_changed', result);
           }
+          if (result.shortId) {
+            global.io.to(`job_${result.shortId}`).emit('job_status_changed', result);
+          }
           global.io.to('admins').emit('job_status_changed', result);
         }
         

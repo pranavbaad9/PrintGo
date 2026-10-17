@@ -21,6 +21,7 @@ const MobileView = () => {
   const [uploading, setUploading] = useState(false);
   const [isSubmittingSettings, setIsSubmittingSettings] = useState(false);
   const [isInitializingPayment, setIsInitializingPayment] = useState(false);
+  const [isVerifyingPayment, setIsVerifyingPayment] = useState(false);
   const [error, setError] = useState('');
   const [price, setPrice] = useState(0);
   const [sessionToken, setSessionToken] = useState(null);
@@ -31,7 +32,7 @@ const MobileView = () => {
   const [iv, setIv] = useState(null);
 
   // Helper: returns auth headers for API requests
-  const authHeaders = () => sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
+  const authHeaders = (token = sessionToken) => token ? { Authorization: `Bearer ${token}` } : {};
 
   const showError = (msg) => {
     setError(msg);
@@ -46,6 +47,51 @@ const MobileView = () => {
     customRange: '',
     pagesToPrint: 1
   });
+
+  // Check URL parameters and sessionStorage for returning payment redirects
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlJobId = params.get('job_id');
+    const urlOrderId = params.get('order_id');
+    
+    let savedJob = null;
+    try {
+      savedJob = JSON.parse(sessionStorage.getItem('printgo_pending_job') || 'null');
+    } catch (e) {}
+
+    const pendingJobId = urlJobId || savedJob?.jobId || urlOrderId;
+    if (pendingJobId) {
+      setJobId(pendingJobId);
+      if (savedJob?.price) setPrice(savedJob.price);
+      setStep(3);
+      setIsVerifyingPayment(true);
+    }
+  }, []);
+
+  // Universal verification function
+  const verifyPaymentStatus = async (targetJobId, activeToken = sessionToken, activeSocket = socket) => {
+    const idToVerify = targetJobId || jobId;
+    if (!idToVerify) return false;
+    try {
+      const headers = activeToken ? { Authorization: `Bearer ${activeToken}` } : {};
+      const verifyRes = await axios.get(`${API_URL}/api/payments/verify/${idToVerify}`, { headers });
+      if (verifyRes.data.success && verifyRes.data.job && verifyRes.data.job.status !== 'PENDING_PAYMENT') {
+        if (activeSocket && sessionId) {
+          activeSocket.emit('payment_success', { sessionId, jobId: idToVerify });
+        }
+        setIsVerifyingPayment(false);
+        setStep(4);
+        try {
+          sessionStorage.removeItem('printgo_pending_job');
+          window.history.replaceState({}, document.title, window.location.pathname);
+        } catch (e) {}
+        return true;
+      }
+    } catch (err) {
+      console.error('Verify payment error:', err);
+    }
+    return false;
+  };
 
   useEffect(() => {
     let newSocket = null;
@@ -81,14 +127,38 @@ const MobileView = () => {
           newSocket.on('disconnect', () => setIsConnected(false));
           newSocket.on('connect_error', () => setIsConnected(false));
 
-          newSocket.on('kiosk_payment_success', ({ jobId: j }) => { setJobId(j); setStep(4); });
+          newSocket.on('kiosk_payment_success', ({ jobId: j }) => { 
+            if (j) setJobId(j); 
+            setIsVerifyingPayment(false);
+            setStep(4); 
+          });
           newSocket.on('session_cancelled', () => {
             showError('Session cancelled by the kiosk. Please scan a new QR code.');
-            setStep(1); // Force back to an invalid state or keep error visible
+            setStep(1);
           });
           newSocket.on('job_status_changed', (job) => {
-            if (['WAITING', 'PRINTING', 'COMPLETED'].includes(job.status) && step !== 4) setStep(4);
+            if (['WAITING', 'PRINTING', 'COMPLETED'].includes(job.status)) {
+              setIsVerifyingPayment(false);
+              setStep(4);
+            }
           });
+
+          // Check if we need to verify a pending payment that just completed via redirect
+          const params = new URLSearchParams(window.location.search);
+          const pendingJob = params.get('job_id') || params.get('order_id');
+          if (pendingJob) {
+            setIsVerifyingPayment(true);
+            setStep(3);
+            let attempts = 0;
+            const poller = setInterval(async () => {
+              attempts++;
+              const done = await verifyPaymentStatus(pendingJob, token, newSocket);
+              if (done || attempts >= 15) {
+                clearInterval(poller);
+                if (!done) setIsVerifyingPayment(false);
+              }
+            }, 2000);
+          }
         }
       } catch (err) {
         console.error('Failed to join session:', err);
@@ -107,21 +177,11 @@ const MobileView = () => {
     let interval;
     if (step === 3 && jobId) {
       interval = setInterval(async () => {
-        try {
-          const verifyRes = await axios.get(`${API_URL}/api/payments/verify/${jobId}`, { headers: authHeaders() });
-          if (verifyRes.data.success && verifyRes.data.job.status !== 'PENDING_PAYMENT') {
-            if (socket && sessionId) {
-              socket.emit('payment_success', { sessionId, jobId });
-            }
-            setStep(4);
-          }
-        } catch (err) {
-          console.error('Polling verify error:', err);
-        }
-      }, 3000);
+        await verifyPaymentStatus(jobId);
+      }, 2500);
     }
     return () => clearInterval(interval);
-  }, [step, jobId]);
+  }, [step, jobId, sessionToken, socket]);
 
   useEffect(() => {
     if (!fileData) return;
@@ -306,6 +366,9 @@ const MobileView = () => {
         // Use the server-calculated cost as the authoritative price
         const serverCost = res.data.job.cost;
         setPrice(serverCost);
+        try {
+          sessionStorage.setItem('printgo_pending_job', JSON.stringify({ jobId: res.data.job.shortId, price: serverCost }));
+        } catch (e) {}
         socket.emit('payment_initiated', { sessionId, price: serverCost, jobId: res.data.job.shortId });
         setStep(3);
       }
@@ -340,7 +403,12 @@ const MobileView = () => {
     }
 
     try {
-      const orderRes = await axios.post(`${API_URL}/api/payments/order/${jobId}`, {}, { timeout: 15000, headers: authHeaders() });
+      const returnUrl = `${window.location.origin}/m/${sessionId}?order_id={order_id}&job_id=${jobId}`;
+      const orderRes = await axios.post(`${API_URL}/api/payments/order/${jobId}`, { 
+        sessionId,
+        returnUrl 
+      }, { timeout: 15000, headers: authHeaders() });
+      
       if (!orderRes.data.success) {
         showError('Failed to create order.');
         setIsInitializingPayment(false);
@@ -355,18 +423,8 @@ const MobileView = () => {
         if (result.error) {
           showError('Payment failed or cancelled.');
         }
-        if (result.paymentDetails) {
-          try {
-            const verifyRes = await axios.get(`${API_URL}/api/payments/verify/${jobId}`, { headers: authHeaders() });
-            if (verifyRes.data.success && verifyRes.data.job.status !== 'PENDING_PAYMENT') {
-              // Tell backend to notify the kiosk UI that payment succeeded
-              socket.emit('payment_success', { sessionId, jobId });
-              setStep(4);
-            }
-          } catch (err) {
-            console.error('Verify error:', err);
-          }
-        }
+        setIsVerifyingPayment(true);
+        verifyPaymentStatus(jobId);
       });
     } catch (err) {
       setIsInitializingPayment(false);
@@ -504,6 +562,21 @@ const MobileView = () => {
           </Card>
         );
       case 3:
+        if (isVerifyingPayment) {
+          return (
+            <Card glass className="text-center animate-scale-in mt-4 py-8 border-none" style={{ boxShadow: 'var(--shadow-lg)' }}>
+              <div style={{ display: 'inline-flex', background: 'var(--primary-50)', borderRadius: '50%', padding: '1.25rem', marginBottom: '1.5rem', border: '1px solid var(--primary-100)' }}>
+                <Loader size={40} className="animate-spin text-primary-600" />
+              </div>
+              <h2 className="text-2xl font-extrabold mb-2" style={{ letterSpacing: '-0.02em' }}>Verifying Payment</h2>
+              <p className="text-muted mb-6 font-medium">Confirming transaction with bank/gateway...</p>
+              <div className="w-full bg-gray-200 rounded-full h-2 mb-4 overflow-hidden">
+                <div className="bg-primary-500 h-2 rounded-full animate-pulse" style={{ width: '80%' }}></div>
+              </div>
+              <p className="text-xs text-muted">Please keep this window open while we route your print job</p>
+            </Card>
+          );
+        }
         return (
           <Card glass className="text-center animate-scale-in mt-4 py-8 border-none" style={{ boxShadow: 'var(--shadow-lg)' }}>
             <div style={{ display: 'inline-flex', background: 'var(--primary-50)', borderRadius: '50%', padding: '1.25rem', marginBottom: '1.5rem', border: '1px solid var(--primary-100)' }}>

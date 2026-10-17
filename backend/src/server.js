@@ -41,11 +41,17 @@ const io = new Server(server, {
   }
 });
 
-if (connection) {
-  const pubClient = connection;
-  const subClient = pubClient.duplicate();
-  io.adapter(createAdapter(pubClient, subClient));
-  logger.info('Redis adapter attached to Socket.io');
+if (connection && process.env.ENABLE_REDIS_ADAPTER === 'true') {
+  try {
+    const pubClient = connection;
+    const subClient = pubClient.duplicate();
+    io.adapter(createAdapter(pubClient, subClient));
+    logger.info('Redis adapter attached to Socket.io');
+  } catch (err) {
+    logger.warn('Failed to attach Redis adapter to Socket.io, using default in-memory adapter:', err.message);
+  }
+} else {
+  logger.info('Using reliable in-memory Socket.io adapter');
 }
 
 app.set('io', io);

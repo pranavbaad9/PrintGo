@@ -7,6 +7,8 @@ const { startPrintingProcess } = require('../../services/queueService');
 const createCashfreeOrder = async (req, res, next) => {
   try {
     const { id } = req.params; // jobId (shortId)
+    const sessionId = req.session?.sessionId || req.body?.sessionId;
+    const returnUrl = req.body?.returnUrl;
     
     // IDOR protection: verify the session owns this job
     if (req.session) {
@@ -16,7 +18,7 @@ const createCashfreeOrder = async (req, res, next) => {
       }
     }
     
-    const orderDetails = await paymentsService.createOrder(id);
+    const orderDetails = await paymentsService.createOrder(id, { sessionId, returnUrl });
     res.json({ success: true, ...orderDetails });
   } catch (error) {
     next(error);
@@ -25,12 +27,25 @@ const createCashfreeOrder = async (req, res, next) => {
 
 const verifyPayment = async (req, res, next) => {
   try {
-    const { id } = req.params; // jobId
+    const { id } = req.params; // jobId (shortId) or gatewayOrderId
     
-    const job = await prisma.printJob.findUnique({ 
+    let job = await prisma.printJob.findUnique({ 
       where: { shortId: id },
       include: { payment: true }
     });
+    
+    // If not found by shortId, check if client passed the Cashfree gatewayOrderId (e.g. order_...)
+    if (!job) {
+      const payment = await prisma.payment.findUnique({
+        where: { gatewayOrderId: id },
+        include: { printJobs: true }
+      });
+      if (payment && payment.printJobs && payment.printJobs.length > 0) {
+        job = payment.printJobs[0];
+        job.payment = payment;
+      }
+    }
+
     if (!job) throw new Error('Job not found');
     
     if (job.status !== 'PENDING_PAYMENT') {
@@ -41,11 +56,11 @@ const verifyPayment = async (req, res, next) => {
        throw new Error('No payment initiated');
     }
 
-    const { updatedJob, wasJustUpdated } = await paymentsService.verifyPayment(job.payment.gatewayOrderId);
+    const { updatedJob } = await paymentsService.verifyPayment(job.payment.gatewayOrderId);
     
     if (updatedJob) {
-      // P4-002: Fallback trigger if Webhook hasn't arrived yet
-      if (updatedJob.status === 'WAITING' && wasJustUpdated) {
+      // Trigger printing if status moved to WAITING
+      if (updatedJob.status === 'WAITING') {
         if (startPrintingProcess) {
           startPrintingProcess(updatedJob.shortId, req.app.get('io'));
         }

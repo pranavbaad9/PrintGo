@@ -109,12 +109,16 @@ const startPrintingProcess = async (shortId, io) => {
   
   if (useRedis && printQueue) {
     try {
-      await printQueue.add('printJob', { shortId }, {
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 1000 }
-      });
+      // Race with a 2.5s timeout so a dead/limited Redis never blocks printing
+      await Promise.race([
+        printQueue.add('printJob', { shortId }, {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 1000 }
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Redis operation timed out')), 2500))
+      ]);
     } catch(e) {
-      console.warn("Failed to add to Redis queue, running synchronously.");
+      console.warn(`Redis queue unavailable (${e.message}), executing print job in-memory fallback.`);
       processJob(shortId);
     }
   } else {

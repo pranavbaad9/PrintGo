@@ -18,7 +18,8 @@ const getCashfreeConfig = () => {
   };
 };
 
-const createOrder = async (jobId) => {
+const createOrder = async (jobId, options = {}) => {
+  const { sessionId, returnUrl: clientReturnUrl } = options;
   const job = await prisma.printJob.findUnique({ where: { shortId: jobId }, include: { payment: true } });
   if (!job) throw new AppError('Job not found', 404);
   if (job.status !== 'PENDING_PAYMENT') throw new AppError('Job is not pending payment', 400);
@@ -33,6 +34,15 @@ const createOrder = async (jobId) => {
     }
   });
 
+  const frontendBase = (process.env.FRONTEND_URL || 'https://printgo.vercel.app').replace(/\/+$/, '');
+  
+  let targetReturnUrl = clientReturnUrl;
+  if (!targetReturnUrl) {
+    targetReturnUrl = sessionId 
+      ? `${frontendBase}/m/${sessionId}?order_id={order_id}&job_id=${job.shortId}`
+      : `${frontendBase}/?order_id={order_id}&job_id=${job.shortId}`;
+  }
+
   try {
     const response = await axios.post(config.url, {
       customer_details: {
@@ -41,7 +51,7 @@ const createOrder = async (jobId) => {
         customer_name: 'PrintGo User'
       },
       order_meta: {
-        return_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/` 
+        return_url: targetReturnUrl
       },
       order_amount: job.cost,
       order_currency: 'INR'

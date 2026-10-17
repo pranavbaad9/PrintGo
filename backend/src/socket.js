@@ -92,6 +92,8 @@ const setupSockets = (io) => {
           logger.error('Error recovering stuck jobs for printer:', e);
         }
       })();
+    } else if (socket.userType === 'session' && socket.machineId) {
+      socket.join(`machine_${socket.machineId}`);
     }
 
     // Admin users join the 'admins' room for receiving printer status updates
@@ -149,14 +151,24 @@ const setupSockets = (io) => {
       io.to(sessionId).emit('kiosk_settings_updated', { settingsData, price });
     });
 
+    socket.on('track_job', (jobId) => {
+      if (jobId && typeof jobId === 'string') {
+        socket.join(`job_${jobId}`);
+      }
+    });
+
     socket.on('payment_initiated', ({ sessionId, price, jobId }) => {
       if (!validateSessionOwnership(socket, sessionId)) return;
+      if (jobId) socket.join(`job_${jobId}`);
       io.to(sessionId).emit('kiosk_payment_initiated', { price, jobId });
     });
 
     socket.on('payment_success', ({ sessionId, jobId }) => {
       if (!validateSessionOwnership(socket, sessionId)) return;
       io.to(sessionId).emit('kiosk_payment_success', { jobId });
+      if (jobId) {
+        io.to(`job_${jobId}`).emit('kiosk_payment_success', { jobId });
+      }
     });
 
     socket.on('cancel_session', ({ sessionId }) => {

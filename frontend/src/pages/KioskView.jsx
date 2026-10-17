@@ -54,13 +54,23 @@ const KioskView = () => {
           newSocket.on('kiosk_user_connected', () => setStep(prev => prev < 2 ? 2 : prev));
           newSocket.on('kiosk_file_uploaded', (data) => { setFileData(data); setStep(3); });
           newSocket.on('kiosk_settings_updated', ({ settingsData: s, price: p }) => { setSettingsData(s); setPrice(p); });
-          newSocket.on('kiosk_payment_initiated', ({ price: p, jobId: j }) => { setPrice(p); setJobId(j); setStep(4); });
-          newSocket.on('kiosk_payment_success', () => { setStep(5); setJobStatus('WAITING'); });
+          newSocket.on('kiosk_payment_initiated', ({ price: p, jobId: j }) => { 
+            setPrice(p); 
+            setJobId(j); 
+            setStep(4); 
+            newSocket.emit('track_job', j);
+          });
+          newSocket.on('kiosk_payment_success', ({ jobId: j } = {}) => { 
+            if (j) setJobId(j); 
+            setStep(5); 
+            setJobStatus(prev => prev === 'PRINTING' || prev === 'COMPLETED' ? prev : 'WAITING'); 
+          });
           newSocket.on('job_status_changed', (job) => {
             setJobId((cur) => {
-              if (job.shortId === cur) {
+              if (!cur || job.shortId === cur) {
                 setJobStatus(job.status);
                 if (['WAITING', 'PRINTING', 'COMPLETED', 'FAILED', 'CANCELLED'].includes(job.status)) setStep(5);
+                return job.shortId;
               }
               return cur;
             });
@@ -81,8 +91,28 @@ const KioskView = () => {
 
   // Removed Inactivity timer logic as per request
 
+  // Active poller for Step 4 (Waiting for Payment) and Step 5 (Print Progress)
   useEffect(() => {
-    if (step === 5 && jobId) {
+    if (!jobId) return;
+
+    if (step === 4) {
+      // Actively poll payment verification so Kiosk never hangs if mobile disconnects
+      const pollPayment = async () => {
+        try {
+          const res = await axios.get(`${API_URL}/api/payments/verify/${jobId}`, { headers: authHeaders() });
+          if (res.data.success && res.data.job && res.data.job.status !== 'PENDING_PAYMENT') {
+            setJobStatus(res.data.job.status);
+            setStep(5);
+          }
+        } catch (e) {
+          // Silent catch during polling
+        }
+      };
+      const interval = setInterval(pollPayment, 2500);
+      return () => clearInterval(interval);
+    }
+
+    if (step === 5) {
       const fetchJob = async () => {
         try {
           const res = await axios.get(`${API_URL}/api/jobs/${jobId}`, { headers: authHeaders() });
